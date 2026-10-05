@@ -1,5 +1,10 @@
 # Prompt for the AI agent: three more Java projects
 
+> **Update:** the team rejected **Part B (CodeSleuth)** and **Part C (Tatkal Rush)**. Do not use them.
+> The replacement complex engineering problem prompts are separate, self-contained files:
+> `AGENT_PROMPT_SwitchType.md` (ready). A second one is still to be chosen.
+> **Part 0 and Part A (Campus Premier League) are still valid.**
+
 How to use this file: start a **new agent session per project**. Paste **Part 0** plus **one** of Part A, B or C.
 One project per session gives much better quality than one giant session.
 
