@@ -25,7 +25,7 @@ export async function render(ctx) {
             <td class="right num">${Number(r.stock_qty)} ${esc(r.unit)}</td>
             <td class="right num">${Number(r.reorder_level)} ${esc(r.unit)}</td>
             <td>${r.low ? chip('LOW') : '<span class="small muted">OK</span>'}</td>
-            <td class="right num">${r.used_in} dishes</td>
+            <td class="right num">${r.used_in} ${Number(r.used_in) === 1 ? 'dish' : 'dishes'}</td>
             <td class="right">${hasRole() ? `<button class="btn btn-sm" data-id="${r.ingredient_id}" data-name="${esc(r.name)}" data-unit="${esc(r.unit)}">Restock</button>` : ''}</td>
           </tr>`;
         }).join('')}</tbody></table></div>`;

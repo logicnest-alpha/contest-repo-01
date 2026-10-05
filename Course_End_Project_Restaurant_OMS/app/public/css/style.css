@@ -133,7 +133,7 @@ table.data tr.click:hover td { background: var(--surface-2); }
 .login-card .brand { color: var(--text); padding: 0 0 18px; }
 .login-card .brand-sub { color: var(--muted); }
 .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-.demo-grid button { text-align: left; }
+.demo-grid button { text-align: left; justify-content: flex-start; white-space: normal; min-width: 0; }
 .demo-grid .role { display: block; font-size: .72rem; color: var(--muted); font-weight: 500; }
 
 /* ---------- dashboard ---------- */
