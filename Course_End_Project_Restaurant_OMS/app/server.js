@@ -46,7 +46,12 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 db.init()
-  .then(() => app.listen(PORT, () => console.log(`RMS listening on port ${PORT}`)))
+  .then(() => app.listen(PORT, () => {
+    console.log(`RMS listening on port ${PORT}`);
+    if (process.env.SMOKE_TEST === 'true') {
+      require('./scripts/smoke-test').smokeTest(`http://127.0.0.1:${PORT}`).catch((e) => console.error('[smoke]', e.message));
+    }
+  }))
   .catch((err) => {
     console.error('Could not connect to the database:', err.message);
     process.exit(1);
