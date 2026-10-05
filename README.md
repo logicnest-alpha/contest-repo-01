@@ -13,6 +13,7 @@ Each folder can be uploaded to Overleaf as it is; the compiled `Main.pdf` is inc
 |--------|-------------|-------|
 | [`Case_Study_Library_Management/`](Case_Study_Library_Management) | Case Study | Database Design for a Library Management System: Resource Tracking, Lending Operations, and Fine Administration |
 | [`CEP_Database_Security/`](CEP_Database_Security) | Complex Engineering Problem | Database Security and Privacy Engineering for Sensitive Information Systems |
+| [`Course_End_Project_Restaurant_OMS/`](Course_End_Project_Restaurant_OMS) | Course End Project | Restaurant Order Management System (live full-stack web app) |
 
 All SQL was written for and tested on **PostgreSQL 16** (works on 15+).
 Every output quoted in the reports was produced by running these scripts.
@@ -73,3 +74,22 @@ On Windows use `psql -U postgres ...` and set `PGUSER=postgres` / `PGPASSWORD=..
 running `benchmark.py`. The passwords in `01_roles.sql` are demo values only.
 Timings depend on the machine; the relative results (which controls are cheap and which
 are expensive) stay the same.
+
+## 3. Restaurant Order Management System (Course End Project)
+
+**Live:** https://spice-route-rms.onrender.com  (free hosting: the first visit after
+15 idle minutes takes up to a minute to wake the server)
+
+Logins: `manager / manager123`, `waiter / waiter123`, `chef / chef123`, `cashier / cashier123`
+
+```
+Course_End_Project_Restaurant_OMS/
+  Main.tex, Main.pdf, College Logo RGB.jpg, screenshots/   report
+  app/                                                      the application (see app/README.md)
+    db/        PostgreSQL schema, triggers, functions, demo data, grants
+    src/       Express API (auth, routes, DB pool)
+    public/    frontend (HTML/CSS/JS, Chart.js)
+    scripts/   init-db.js, smoke-test.js
+```
+
+Stack: PostgreSQL 17 (Supabase) + Node.js 22 / Express (Render) + vanilla JavaScript.
