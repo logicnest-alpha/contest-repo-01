@@ -8,6 +8,8 @@
 | 25881A05X9 | Chepyala Vishal      |
 | 25881A05X0 | Gundu Srijay Krishna |
 
+**Long-form explainer:** open [`project-explained.html`](project-explained.html) in a browser for a 17-chapter walkthrough of how the whole project works, with diagrams, code, results and a unit-by-unit syllabus map.
+
 ![Green corridor: the junctions ahead of the ambulance are already green](screenshots/03-corridor-before-arrival.png)
 
 ## Problem statement
