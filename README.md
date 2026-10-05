@@ -15,6 +15,12 @@ Each folder can be uploaded to Overleaf as it is; the compiled `Main.pdf` is inc
 | [`CEP_Database_Security/`](CEP_Database_Security) | Complex Engineering Problem | Database Security and Privacy Engineering for Sensitive Information Systems |
 | [`Course_End_Project_Restaurant_OMS/`](Course_End_Project_Restaurant_OMS) | Course End Project | Restaurant Order Management System (live full-stack web app) |
 
+The repository also holds the batch's **Object Oriented Programming through Java** course end project:
+
+| Folder | Report type | Topic |
+|--------|-------------|-------|
+| [`Course_End_Project_Java_Green_Corridor/`](Course_End_Project_Java_Green_Corridor) | Course End Project (Java) | GreenCorridor: Smart Traffic Junction Simulator with an Emergency Vehicle Green Corridor (Swing + multithreading + JDBC/MySQL) |
+
 All SQL was written for and tested on **PostgreSQL 16** (works on 15+).
 Every output quoted in the reports was produced by running these scripts.
 
@@ -93,3 +99,30 @@ Course_End_Project_Restaurant_OMS/
 ```
 
 Stack: PostgreSQL 17 (Supabase) + Node.js 22 / Express (Render) + vanilla JavaScript.
+
+## 4. GreenCorridor (Java Course End Project)
+
+A Java Swing desktop simulator of a busy road with up to three signalled junctions. Every vehicle
+runs on its own thread, and ambulances get a "green corridor": the junctions ahead turn green
+before they arrive. It compares no priority, local-sensor priority and the green corridor, and
+stores every run in MySQL through JDBC (CRUD, batch inserts and stored procedures through
+`CallableStatement`).
+
+```
+Course_End_Project_Java_Green_Corridor/
+  README.md        problem statement, results, syllabus-to-code map, screenshots
+  screenshots/     taken from the running application
+  app/             Maven project (see app/README.md)
+    src/main/java/com/greencorridor/   model, road, vehicle, engine, db, io, exception, ui
+    src/main/resources/sql/            green_corridor.sql (tables, procedures, sample data)
+    src/test/java/                     26 JUnit tests, benchmark and screenshot tools
+```
+
+Run (JDK 8+, MySQL 8):
+
+```bash
+cd Course_End_Project_Java_Green_Corridor/app
+mvn package
+java -jar target/GreenCorridor.jar     # Database > Connection settings, then let it create the tables
+```
+
