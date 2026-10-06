@@ -66,7 +66,7 @@ npm start                 # http://localhost:3000, creates the tables on first s
 npm test                  # unit tests (no database or mail server needed)
 ```
 
-- **Database:** any PostgreSQL 14+. A free Supabase project works (use the connection string from Project Settings › Database).
+- **Database:** any PostgreSQL 14+. A free Supabase project works: click **Connect** in your project, choose the **Session pooler** connection string (port 5432) and put your database password in it. Don't use the *Transaction pooler* (port 6543): the background engines keep a long-lived lock that needs a session connection.
 - **`APP_SECRET`:** at least 32 random characters. It encrypts the stored mailbox passwords and API keys. Don't change it later.
 
 ### Hosting: it must run 24/7

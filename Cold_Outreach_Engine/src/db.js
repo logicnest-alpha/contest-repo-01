@@ -38,6 +38,10 @@ async function migrate() {
 
 async function init() {
   if (!config.databaseUrl) throw new Error('DATABASE_URL is not set');
+  if (/pooler\.supabase\.com:6543/.test(config.databaseUrl)) {
+    console.warn('DATABASE_URL uses the Supabase Transaction pooler (port 6543). Use the Session pooler (port 5432) '
+      + 'so only one copy of the app runs the background engines.');
+  }
   pool = makePool();
   pool.on('error', (err) => console.error('[db] idle client error:', err.message));
   await pool.query('SELECT 1');
