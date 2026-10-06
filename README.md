@@ -93,3 +93,20 @@ Course_End_Project_Restaurant_OMS/
 ```
 
 Stack: PostgreSQL 17 (Supabase) + Node.js 22 / Express (Render) + vanilla JavaScript.
+
+## 4. Cold Outreach Engine
+
+```
+Cold_Outreach_Engine/      self-hosted cold-email system (see Cold_Outreach_Engine/README.md)
+  src/mail/     Zoho SMTP/IMAP, templates + spintax, content checker, SPF/DKIM/DMARC check
+  src/engine/   warmup, campaign sender, inbox sync (replies, bounces, unsubscribes), health
+  src/leads/    CSV / Apollo / Hunter / Google Maps sources, verification, website enrichment, ICP score
+  src/api/      REST API         public/   web UI         db/   PostgreSQL schema
+```
+
+Connects Zoho mailboxes, warms them up against each other (rescuing mail from spam and
+replying), runs multi-step campaigns to your ICP with sending caps and time windows, and puts
+every reply from every mailbox into one unified inbox.
+
+Stack: Node.js 20+ / Express + PostgreSQL 14+ + vanilla JavaScript. Run with
+`cd Cold_Outreach_Engine && npm install && cp .env.example .env && npm start`.
