@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EP001 render</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #000; }
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #06080D; }
+  #art { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+  #grain { position: absolute; inset: 0; width: 1080px; height: 1920px; opacity: 0.085; mix-blend-mode: overlay; pointer-events: none; }
+  #vig { position: absolute; inset: 0; background: radial-gradient(ellipse 75% 60% at 50% 48%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.5) 100%); pointer-events: none; }
+  #cap { position: absolute; left: 90px; right: 90px; text-align: center; font-family: 'Inter', sans-serif; font-weight: 800; font-size: 64px; line-height: 1.12; letter-spacing: -0.01em; color: #F5F3EE; text-shadow: 0 2px 14px rgba(0,0,0,0.65), 0 0 2px rgba(0,0,0,0.5); transform: translateY(-50%); }
+  #cap em { font-style: normal; color: #E8A04F; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="art" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div id="vig"></div>
+  <canvas id="grain" width="540" height="960"></canvas>
+  <div id="cap"></div>
+</div>
+<script>
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+const lerp = (a, b, x) => a + (b - a) * x;
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const R = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+function dust(n, seed, x0, y0, w, h, t, color, op, r) {
+  let s = '';
+  for (let i = 0; i < n; i++) {
+    const a = R(seed * 31 + i * 7.13), b = R(seed * 17 + i * 3.71), c = R(seed * 5 + i * 9.27), d = R(seed * 11 + i * 1.93);
+    const px = x0 + a * w + Math.sin(t * 0.5 + i * 1.7) * 1.1;
+    const py = y0 + (((b * h - t * (0.6 + c * 1.2)) % h) + h) % h;
+    const o = op * (0.35 + 0.65 * d) * (0.65 + 0.35 * Math.sin(t * 1.7 + i));
+    s += `<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${(r * (0.5 + c)).toFixed(2)}" fill="${color}" opacity="${o.toFixed(3)}"/>`;
+  }
+  return s;
+}
+
+const DEFS = `<defs>
+  <filter id="bl05" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="0.5"/></filter>
+  <filter id="bl1" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1"/></filter>
+  <filter id="bl2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2"/></filter>
+  <filter id="bl4" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>
+  <filter id="bl8" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="8"/></filter>
+</defs>`;
+
+// Seated figure + desk in the 200x170 pose space (see character sheet)
+function rig(o) {
+  const lean = o.lean || 0, a = o.lap || 0, skin = o.skin || '#5E4A42', face = o.face || skin;
+  const desk = o.desk || '#33291F', leg = o.leg || '#261F19';
+  return `
+  <rect x="112" y="92" width="84" height="5" fill="${desk}"/>
+  <rect x="116" y="97" width="4" height="63" fill="${leg}"/>
+  <rect x="188" y="97" width="4" height="63" fill="${leg}"/>
+  ${o.glow ? `<path d="M150 52 L158 88 L96 100 Z" fill="#A9C3E0" opacity="${o.glow}" filter="url(#bl2)"/>` : ''}
+  ${o.notebook ? `<path d="M164 90 L192 90 L190 92 L166 92 Z" fill="#E9E3D6" opacity="0.95"/>` : ''}
+  <rect x="122" y="88" width="38" height="4" rx="1" fill="#454B57"/>
+  <path d="M158 88 L150 52 L154 51 L162 88 Z" fill="#454B57"/>
+  <rect x="40" y="114" width="44" height="6" fill="#20242B"/>
+  <rect x="36" y="70" width="6" height="50" fill="#20242B"/>
+  <rect x="58" y="120" width="4" height="40" fill="#20242B"/>
+  <path d="M50 104 L106 106 L106 118 L50 118 Z" fill="#262A32"/>
+  <path d="M96 110 L108 110 L110 152 L99 152 Z" fill="#262A32"/>
+  <path d="M98 150 L112 150 Q120 152 120 158 L97 158 Z" fill="#D9D5CC"/>
+  <g transform="translate(0 ${o.breath || 0}) rotate(${lean} 60 112)">
+    <path d="M46 66 Q62 58 76 68 L82 112 L48 114 Q40 100 42 80 Z" fill="#1A1D24"/>
+    <path d="M42 62 Q50 56 58 62 L56 80 Q44 78 42 62 Z" fill="#23272F"/>
+    <g opacity="${1 - a}" transform="rotate(${o.armRot || 0} 68 74)">
+      <path d="M68 72 Q92 82 124 86 L124 92 Q92 94 64 84 Z" fill="#1E2229"/>
+      <ellipse cx="127" cy="89" rx="4" ry="3" fill="${skin}"/>
+    </g>
+    <g opacity="${a}">
+      <path d="M68 74 Q78 96 94 106 L91 112 Q72 102 63 82 Z" fill="#1E2229"/>
+      <ellipse cx="93" cy="110" rx="3.5" ry="3" fill="${skin}"/>
+    </g>
+    <rect x="66" y="50" width="9" height="12" fill="${skin}"/>
+    <ellipse cx="74" cy="42" rx="13" ry="15" fill="${face}"/>
+    <path d="M86 40 L90 46 L85 47 Z" fill="${face}"/>
+    <path d="M61 46 Q58 24 74 25 Q88 26 87 38 L84 35 L83 40 L80 35 L77 39 Q70 34 67 42 Q66 48 64 52 Z" fill="#121318"/>
+    <path d="M70 26 L68 20 M76 25 L78 19 M82 28 L86 23" stroke="#121318" stroke-width="2.4" stroke-linecap="round"/>
+    ${o.rim ? `<path d="M87 36 Q91 44 86 54" stroke="${o.rimColor || '#A9C3E0'}" stroke-width="1.6" fill="none" opacity="${o.rim}"/>
+    <path d="M77 70 Q83 90 82 110" stroke="${o.rimColor || '#A9C3E0'}" stroke-width="1.2" fill="none" opacity="${o.rim * 0.6}"/>` : ''}
+    ${o.backRim ? `<path d="M60 44 Q56 32 62 25" stroke="${o.backRimColor}" stroke-width="2.2" fill="none" opacity="${o.backRim}"/>
+    <path d="M45 66 Q40 84 44 108" stroke="${o.backRimColor}" stroke-width="1.6" fill="none" opacity="${o.backRim * 0.8}"/>` : ''}
+  </g>`;
+}
+
+// ---------- SCENES (drawn in 90 x 160 units) ----------
+function s01(lt) {
+  const br = -0.35 * Math.sin(Math.PI * clamp((lt - 0.8) / 2.4));
+  return `
+  <defs><linearGradient id="g01" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#05080F"/><stop offset="1" stop-color="#0F1726"/></linearGradient></defs>
+  <rect width="90" height="160" fill="url(#g01)"/>
+  <rect y="112" width="90" height="48" fill="#0B1220"/>
+  <rect x="6" y="32" width="30" height="42" fill="#3E5A82" opacity="0.3" filter="url(#bl4)"/>
+  <rect x="10" y="36" width="22" height="34" fill="#1B2840"/>
+  <rect x="12" y="38" width="8" height="15" fill="#6F8FBA" opacity="0.6"/>
+  <rect x="22" y="38" width="8" height="15" fill="#6F8FBA" opacity="0.45"/>
+  <rect x="12" y="55" width="8" height="13" fill="#5B7BA6" opacity="0.38"/>
+  <rect x="22" y="55" width="8" height="13" fill="#5B7BA6" opacity="0.3"/>
+  <circle cx="26.5" cy="42" r="1.6" fill="#DCE6F5" opacity="0.7" filter="url(#bl05)"/>
+  <path d="M21 36 V70 M10 54 H32" stroke="#090E19" stroke-width="1.4"/>
+  <polygon points="12,70 32,70 72,124 26,124" fill="#7F9CC4" opacity="0.12" filter="url(#bl2)"/>
+  <ellipse cx="50" cy="121" rx="22" ry="3" fill="#5B7BA6" opacity="0.18" filter="url(#bl1)"/>
+  ${dust(18, 11, 14, 66, 50, 56, lt, '#C9D8EE', 0.55, 0.2)}
+  <rect x="40" y="86" width="40" height="2.4" fill="#2E251C"/>
+  <rect x="42" y="88.4" width="1.4" height="24" fill="#221B15"/>
+  <rect x="76.6" y="88.4" width="1.4" height="24" fill="#221B15"/>
+  <path d="M76 86 L74 78.5 L78.6 73.4" stroke="#0C0D11" stroke-width="0.8" fill="none"/>
+  <path d="M77.6 71.6 L82.4 73.6 L80 76.6 Z" fill="#0C0D11"/>
+  <rect x="70" y="82.5" width="2.8" height="3.5" rx="0.4" fill="#9FA8B8" opacity="0.6"/>
+  <rect x="52" y="84.4" width="15" height="1.8" rx="0.3" fill="#3B414C"/>
+  <rect x="43" y="96" width="14" height="1.8" fill="#1B1F26"/>
+  <rect x="44" y="97.8" width="0.9" height="14" fill="#1B1F26"/>
+  <rect x="55" y="97.8" width="0.9" height="14" fill="#1B1F26"/>
+  <g transform="translate(0 ${br.toFixed(3)})">
+    <path d="M43.4 78.6 Q50 74 56.6 78.6 L57.6 96.6 L42.4 96.6 Z" fill="#191C23"/>
+    <path d="M45.4 77 Q50 74.4 54.6 77 Q52.2 79.6 50 79.6 Q47.8 79.6 45.4 77 Z" fill="#22262E"/>
+    <ellipse cx="50" cy="72" rx="4.1" ry="4.6" fill="#141519"/>
+    <path d="M46 70.6 L45 67.8 L47.3 69.1 L47.5 66.6 L49.2 68.5 L50.4 66.2 L51.5 68.5 L53.6 67.2 L53.1 69.6 L54.8 69.8 L54 71.2 Z" fill="#141519"/>
+    <path d="M46 70 Q45.5 73 46.6 75.8" stroke="#8FA8CC" stroke-width="0.35" fill="none" opacity="0.75"/>
+    <path d="M43.6 79.2 Q42.9 86 42.6 95.5" stroke="#6F8FBA" stroke-width="0.3" opacity="0.55" fill="none"/>
+  </g>`;
+}
+
+function s02(lt) {
+  const o = ease(lt / 0.9), b = 0.06 + 0.94 * ease((lt - 0.25) / 1.0);
+  const y1 = lerp(85, 56, o), y2 = lerp(81, 50, o);
+  const sk = [
+    [`<rect x="-6" y="-8" width="12" height="16" rx="0.6" stroke-dasharray="1.6 1"/><path d="M-4 -4 H4 M-4 -1 H2 M-4 2 H3"/>`, 62, 30, 0.8],
+    [`<circle r="5" stroke-dasharray="1.6 1"/><circle r="1.4"/>`, 79, 34, 1.4],
+    [`<path d="M-5 3 L3 -5 M3 -5 L0 -5 M3 -5 L3 -2"/>`, 48, 40, 2.0],
+    [`<rect x="-4.5" y="-3" width="9" height="6" stroke-dasharray="1.6 1"/><path d="M-4.5 -3 L4.5 3"/>`, 74, 47, 2.6],
+    [`<path d="M-6 2 Q-3 -4 0 0 T6 -3"/><circle cx="-6" cy="2" r="0.8"/><circle cx="6" cy="-3" r="0.8"/>`, 57, 21, 3.2]
+  ];
+  let sketches = '';
+  for (const [shape, x, y, st] of sk) {
+    const k = ease((lt - st) / 3.4);
+    const fade = ease((lt - st) / 0.6) * (1 - 0.6 * ease((lt - 4.8) / 0.7));
+    const yy = y + lerp(10, -10, k) - (lt > 4.8 ? (lt - 4.8) * 8 : 0);
+    const rot = Math.sin(lt * 0.8 + x) * 4;
+    sketches += `<g transform="translate(${x} ${yy.toFixed(2)}) rotate(${rot.toFixed(2)})" opacity="${fade.toFixed(3)}" fill="none" stroke-linecap="round">
+      <g stroke="#E9E3D6" stroke-width="1.2" opacity="0.35" filter="url(#bl05)">${shape}</g>
+      <g stroke="#F1ECE2" stroke-width="0.5">${shape}</g></g>`;
+  }
+  return `
+  <rect width="90" height="160" fill="#060A13"/>
+  <ellipse cx="64" cy="66" rx="34" ry="30" fill="#A9C3E0" opacity="${(0.22 * b).toFixed(3)}" filter="url(#bl8)"/>
+  <path d="M46 ${y1.toFixed(2)} L80 ${y2.toFixed(2)} L82 82 L48 86 Z" fill="#A9C3E0" opacity="${(0.88 * b).toFixed(3)}"/>
+  <g opacity="${(0.25 * b * o).toFixed(3)}" fill="#5B7BA6">
+    <path d="M50 ${lerp(84, 62, o).toFixed(2)} l26 -3.2 l0 2 l-26 3.2 Z"/>
+    <path d="M51 ${lerp(85, 70, o).toFixed(2)} l14 -1.7 l0 6 l-14 1.7 Z"/>
+  </g>
+  <path d="M44 88 L86 84 L88 90 L44 94 Z" fill="#3B414C"/>
+  ${sketches}
+  <path d="M0 160 L0 112 Q8 98 20 96 Q26 84 36 86 Q44 90 44 102 Q58 106 64 122 L70 160 Z" fill="#171A21"/>
+  <path d="M44 102 Q58 106 64 122" stroke="#A9C3E0" stroke-width="0.7" fill="none" opacity="${(0.5 * b).toFixed(3)}"/>
+  <ellipse cx="32" cy="80" rx="11" ry="13" fill="#121318"/>
+  <path d="M23 72 L21 66 M28 68 L27 62 M34 68 L36 62 M40 72 L44 67" stroke="#121318" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M40 70 Q44.5 76 43 87" stroke="#C8D8EE" stroke-width="0.9" fill="none" opacity="${(0.85 * b).toFixed(3)}"/>
+  <path d="M36 62 Q39 66 41 70" stroke="#C8D8EE" stroke-width="0.6" fill="none" opacity="${(0.6 * b).toFixed(3)}"/>`;
+}
+
+function s03(lt) {
+  const handOut = ease(seg(lt, 1.0, 2.1));
+  const peel = ease(seg(lt, 2.3, 2.8));
+  const fall = seg(lt, 2.8, 4.0);
+  const nx = lerp(0, 8, fall), ny = 60 * fall * fall, nr = peel * 10 + 70 * fall;
+  return `
+  <rect width="90" height="160" fill="#1C1814"/>
+  <path d="M0 40 L90 20 M0 90 L90 70 M0 140 L90 120" stroke="#15120F" stroke-width="0.6"/>
+  <rect x="58" y="-4" width="40" height="32" fill="#3F4550" transform="rotate(12 78 12)"/>
+  <rect x="61" y="-1" width="34" height="24" fill="#A9C3E0" opacity="0.55" transform="rotate(12 78 12)"/>
+  <ellipse cx="70" cy="22" rx="28" ry="22" fill="#A9C3E0" opacity="0.14" filter="url(#bl4)"/>
+  <g transform="rotate(-8 28 57)">
+    <rect x="12" y="36" width="32" height="42" fill="#C8C2B5" opacity="0.85"/>
+    <path d="M16 46 H38 M16 52 H34 M16 58 H37" stroke="#4A4A50" stroke-width="0.7"/>
+    <rect x="17" y="62" width="10" height="7" fill="none" stroke="#4A4A50" stroke-width="0.5"/>
+    <path d="M27 65 H33 L33 70" stroke="#4A4A50" stroke-width="0.5" fill="none"/>
+    <path d="M16 61 L39 75 M39 61 L16 75" stroke="#4A4A50" stroke-width="0.8"/>
+  </g>
+  <g transform="rotate(6 61 71)">
+    <rect x="46" y="52" width="30" height="38" fill="#C8C2B5" opacity="0.78"/>
+    <rect x="50" y="58" width="14" height="10" fill="none" stroke="#4A4A50" stroke-width="0.6"/>
+    <path d="M50 74 H70 M50 79 H66 M50 84 H68" stroke="#4A4A50" stroke-width="0.6" stroke-dasharray="2 1.2"/>
+    <path d="M66 58 L72 66" stroke="#4A4A50" stroke-width="0.6"/>
+  </g>
+  <g transform="rotate(10 26 92)"><rect x="20" y="86" width="12" height="12" fill="#A8A58E" opacity="0.9"/><path d="M22 88 L30 96 M30 88 L22 96" stroke="#4A4A50" stroke-width="0.6"/></g>
+  <g transform="rotate(-6 40 98)"><rect x="34" y="92" width="12" height="12" fill="#A8A58E" opacity="0.88"/><path d="M36 96 H44 M36 99 H42" stroke="#4A4A50" stroke-width="0.5"/></g>
+  <g transform="translate(${nx.toFixed(2)} ${ny.toFixed(2)}) rotate(${nr.toFixed(2)} 68 110)"><rect x="62" y="104" width="12" height="12" fill="#A8A58E" opacity="0.9"/><path d="M64 107 H72 M64 110 H70" stroke="#4A4A50" stroke-width="0.5"/></g>
+  <path d="M30 120 L46 110" stroke="#101114" stroke-width="1.5" stroke-linecap="round"/>
+  <g transform="translate(${lerp(0, -24, handOut).toFixed(2)} ${lerp(0, 26, handOut).toFixed(2)})">
+    <ellipse cx="24" cy="122" rx="8" ry="5.5" fill="#5E4A42"/>
+    <path d="M6 140 Q12 128 20 124 L14 160 L0 160 L0 146 Z" fill="#191C23"/>
+  </g>
+  <rect width="90" height="160" fill="#22324D" opacity="0.36"/>`;
+}
+
+function s04(lt) {
+  const lean = lerp(-2, -14, ease(seg(lt, 0.3, 2.4)));
+  const lap = ease(seg(lt, 0.5, 1.9));
+  const breath = -0.8 * Math.sin(Math.PI * clamp((lt - 4.2) / 2.2));
+  const flick = 0.16 + 0.03 * Math.sin(lt * 9) * (lt < 4 ? 1 : 0.3);
+  return `
+  <defs><linearGradient id="g04" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#04070D"/><stop offset="1" stop-color="#0B1220"/></linearGradient></defs>
+  <rect width="90" height="160" fill="url(#g04)"/>
+  <ellipse cx="74" cy="96" rx="24" ry="20" fill="#A9C3E0" opacity="${flick.toFixed(3)}" filter="url(#bl8)"/>
+  <g transform="translate(-6 58) scale(0.48)">
+    ${rig({ lean, lap, glow: 0.22, face: '#241D1E', skin: '#4E3E38', rim: 0.85, breath })}
+  </g>`;
+}
+
+function s05(lt) {
+  const f = ease(seg(lt, 2.4, 3.4));
+  const sec = Math.floor(lt) + ease(seg(lt % 1, 0, 0.12));
+  const ang = 200 + sec * 6;
+  const sh = lerp(-34, 34, lt / 6);
+  return `
+  <defs>
+    <filter id="cb" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${(f * 0.9).toFixed(3)}"/></filter>
+    <filter id="fb" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${((1 - f) * 1.4 + 0.01).toFixed(3)}"/></filter>
+  </defs>
+  <rect width="90" height="160" fill="#0D1525"/>
+  <g transform="translate(${sh.toFixed(2)} 0)">
+    <polygon points="-10,10 18,0 70,80 50,96" fill="#5B7BA6" opacity="0.13" filter="url(#bl2)"/>
+    <polygon points="20,0 34,0 86,78 74,86" fill="#5B7BA6" opacity="0.09" filter="url(#bl2)"/>
+  </g>
+  <polygon points="0,60 0,92 90,150 90,118" fill="#000" opacity="0.28"/>
+  <g filter="url(#cb)">
+    <circle cx="45" cy="40" r="17" fill="#000" opacity="0.35" filter="url(#bl1)"/>
+    <circle cx="45" cy="40" r="16" fill="#DCD6C9"/>
+    <circle cx="45" cy="40" r="16" fill="none" stroke="#1A1D24" stroke-width="1.3"/>
+    <path d="M45 25.8 V28.6 M45 51.4 V54.2 M30.8 40 H33.6 M56.4 40 H59.2" stroke="#1A1D24" stroke-width="0.9"/>
+    <path d="M45 40 L45 31 M45 40 L52 43" stroke="#1A1D24" stroke-width="1.3" stroke-linecap="round"/>
+    <path d="M45 40 L${(45 + 12 * Math.sin(ang * Math.PI / 180)).toFixed(2)} ${(40 - 12 * Math.cos(ang * Math.PI / 180)).toFixed(2)}" stroke="#8A4A3A" stroke-width="0.55"/>
+    <circle cx="45" cy="40" r="0.9" fill="#1A1D24"/>
+  </g>
+  <rect width="90" height="160" fill="#22324D" opacity="0.22"/>
+  <g filter="url(#fb)" opacity="${lerp(0.45, 0.95, f).toFixed(3)}">
+    <ellipse cx="58" cy="94" rx="10" ry="5" fill="#A9C3E0" opacity="0.25" filter="url(#bl2)"/>
+    <rect x="38" y="96" width="38" height="2.2" fill="#2E251C"/>
+    <rect x="40" y="98" width="1.2" height="20" fill="#221B15"/><rect x="73" y="98" width="1.2" height="20" fill="#221B15"/>
+    <rect x="52" y="91" width="12" height="5" fill="#A9C3E0" opacity="0.7"/>
+    <path d="M41 85 Q47 81 53 85 L54 102 L40 102 Z" fill="#191C23"/>
+    <ellipse cx="47" cy="79.5" rx="4" ry="4.4" fill="#141519"/>
+    <path d="M43.2 78 L42.4 75.6 L44.5 76.8 L45 74.4 L46.6 76.2 L47.8 74 L48.8 76.2 L50.8 75.2 L50.4 77.4 Z" fill="#141519"/>
+  </g>`;
+}
+
+function s06(lt) {
+  const ex = -0.6 * Math.sin(Math.PI * clamp((lt - 1.6) / 1.4));
+  const streak = ease(seg(lt, 3.2, 4.0));
+  const crowd = [
+    [-10, 92, 1.25, 26, 0.32], [100, 96, 1.35, -30, 0.3], [20, 84, 0.8, 18, 0.24], [80, 82, 0.75, -16, 0.22],
+    [50, 100, 1.5, 34, 0.26], [10, 86, 0.95, -22, 0.2], [70, 90, 1.1, 24, 0.24], [35, 80, 0.6, -12, 0.18]
+  ];
+  let people = '', front = '';
+  crowd.forEach(([x0, y, sc, v, op], i) => {
+    let out = '';
+    if (Math.abs(v) < 1) return;
+    let x = x0 + v * lt;
+    x = ((x + 30) % 150 + 150) % 150 - 30;
+    if (Math.abs(x - 45) < 9 * sc && sc < 1) return;
+    const sx = 1 + streak * 4;
+    out += `<g transform="translate(${x.toFixed(2)} ${y}) scale(${(sc * sx).toFixed(3)} ${sc})" opacity="${(op + streak * 0.25).toFixed(3)}" filter="url(#mb)">
+      <ellipse cx="0" cy="0" rx="6" ry="16" fill="#6A7790"/><circle cx="0" cy="-19" r="4" fill="#6A7790"/></g>
+      <circle cx="${(x + (v > 0 ? 3 : -3) * sc).toFixed(2)}" cy="${(y - 6 * sc).toFixed(2)}" r="${(1.1 * sc).toFixed(2)}" fill="#BFD3EC" opacity="${(0.6 * (1 - streak)).toFixed(3)}" filter="url(#bl05)"/>`;
+    if (sc >= 1.2) front += out; else people += out;
+  });
+  return `
+  <defs><filter id="mb" x="-100%" y="-50%" width="300%" height="200%"><feGaussianBlur stdDeviation="${(2.4 + streak * 6).toFixed(2)} 0.4"/></filter></defs>
+  <rect width="90" height="160" fill="#121B2B"/>
+  <polygon points="0,160 90,160 56,84 34,84" fill="#1A2334"/>
+  <polygon points="0,0 34,40 34,84 0,160" fill="#0E1625"/>
+  <polygon points="90,0 56,40 56,84 90,160" fill="#0E1625"/>
+  <rect x="34" y="40" width="22" height="44" fill="#24304A"/>
+  ${people}
+  <rect x="38" y="4" width="14" height="2" fill="#B9C6DA" opacity="0.55" filter="url(#bl05)"/>
+  <rect x="40" y="20" width="10" height="1.5" fill="#B9C6DA" opacity="0.45" filter="url(#bl05)"/>
+  <rect x="42" y="30" width="6" height="1" fill="#B9C6DA" opacity="0.35"/>
+  <polygon points="38,6 52,6 70,40 20,40" fill="#9FB2CC" opacity="0.05" filter="url(#bl2)"/>
+  <path d="M34 84 L0 160 M56 84 L90 160" stroke="#24304A" stroke-width="0.4"/>
+  <g transform="translate(0 ${ex.toFixed(3)})">
+    <path d="M40.5 62 Q40 50.6 45 49.6 Q50 50.6 49.5 62 Z" fill="#23272F"/>
+    <path d="M39 61 Q45 58 51 61 L52 82 L38 82 Z" fill="#191C23"/>
+    <path d="M41 74 L49 74" stroke="#14171D" stroke-width="1"/>
+  </g>
+  <rect x="40.5" y="82" width="3.5" height="16" fill="#262A32"/>
+  <rect x="46" y="82" width="3.5" height="16" fill="#262A32"/>
+  <rect x="40" y="97" width="4.5" height="1.8" fill="#D9D5CC"/>
+  <rect x="45.5" y="97" width="4.5" height="1.8" fill="#D9D5CC"/>
+  ${front}
+  <rect x="0" y="70" width="90" height="${(30 * streak).toFixed(2)}" fill="#A9C3E0" opacity="${(0.12 * streak).toFixed(3)}" filter="url(#bl4)"/>`;
+}
+
+function s07(lt) {
+  return `
+  <rect width="90" height="160" fill="#060A14"/>
+  <rect x="8" y="48" width="12" height="18" fill="#141E33"/>
+  <path d="M14 48 V66 M8 57 H20" stroke="#060A14" stroke-width="0.5"/>
+  <ellipse cx="50" cy="96" rx="26" ry="15" fill="#A9C3E0" opacity="0.12" filter="url(#bl4)"/>
+  <ellipse cx="51" cy="94" rx="10" ry="6" fill="#A9C3E0" opacity="0.14" filter="url(#bl2)"/>
+  ${dust(14, 7, 40, 80, 22, 18, lt, '#CFE0F5', 0.6, 0.12)}
+  <rect x="38" y="96" width="22" height="1.4" fill="#2E251C"/>
+  <rect x="39" y="97" width="0.8" height="11" fill="#221B15"/>
+  <rect x="58" y="97" width="0.8" height="11" fill="#221B15"/>
+  <rect x="49" y="91" width="5" height="5" fill="#A9C3E0" opacity="0.85"/>
+  <path d="M40 90 Q43 88 46 90 L46.5 99 L39.5 99 Z" fill="#191C23"/>
+  <circle cx="43" cy="87" r="2.3" fill="#121318"/>
+  <path d="M41.2 86 L40.6 84.6 L42 85.3 L42.4 84 L43.4 85 L44.4 84 L44.7 85.4 Z" fill="#121318"/>
+  <path d="M45.2 86 Q46 88 45.4 89.4" stroke="#A9C3E0" stroke-width="0.25" fill="none" opacity="0.8"/>`;
+}
+
+function s08(lt) {
+  const hand = ease(seg(lt, 1.6, 3.6));
+  const doubt = ease(seg(lt, 2.6, 3.2)) * (1 - 0.6 * ease(seg(lt, 4.0, 5.2)));
+  const amber = ease(seg(lt, 2.8, 4.4));
+  const qs = [[20, 40, 7], [66, 30, 5], [10, 64, 4], [80, 62, 6], [44, 22, 4], [30, 28, 5.5], [56, 14, 3.5], [76, 44, 4.5]];
+  let q = '';
+  qs.forEach(([x, y, s], i) => {
+    const yy = y - lt * (0.8 + R(i) * 0.8);
+    const o = (0.14 + 0.32 * doubt) * (0.7 + 0.3 * Math.sin(lt * 1.3 + i));
+    q += `<text x="${(x + Math.sin(lt * 0.6 + i) * 0.8).toFixed(2)}" y="${yy.toFixed(2)}" font-family="Inter, sans-serif" font-weight="700" font-size="${s}" fill="#A9C3E0" opacity="${o.toFixed(3)}">?</text>`;
+  });
+  return `
+  <rect width="90" height="160" fill="#0A101C"/>
+  <rect y="96" width="90" height="64" fill="#1C1814"/>
+  <ellipse cx="54" cy="76" rx="32" ry="26" fill="#A9C3E0" opacity="0.14" filter="url(#bl8)"/>
+  ${q}
+  <path d="M34 52 L76 50 L78 88 L36 90 Z" fill="#8FAACB" opacity="0.88"/>
+  <path d="M38 56 L60 55 M38 60 L70 58.6 M38 64 L54 63.4" stroke="#6E89AD" stroke-width="0.8" opacity="0.6"/>
+  <path d="M37 54 L56 53.2" stroke="#E8A04F" stroke-width="1" opacity="${(0.95 * amber).toFixed(3)}"/>
+  <path d="M37 54 L56 53.2" stroke="#E8A04F" stroke-width="3" opacity="${(0.35 * amber).toFixed(3)}" filter="url(#bl1)"/>
+  <path d="M30 92 L82 88 L88 98 L26 102 Z" fill="#424854"/>
+  <path d="M34 93 L80 89.6 M33 95.6 L82 92 M32 98.2 L84 94.6" stroke="#373C46" stroke-width="0.5"/>
+  <circle cx="16" cy="104" r="5" fill="#BDB7AA" opacity="0.75"/>
+  <path d="M13 102 L18 105 M15 107 L19 101 M12 105 L16 108" stroke="#6A6660" stroke-width="0.5"/>
+  <circle cx="7" cy="112" r="4" fill="#BDB7AA" opacity="0.62"/>
+  <path d="M5 110 L9 114 M8 109 L6 113" stroke="#6A6660" stroke-width="0.4"/>
+  <g transform="translate(${lerp(-16, 0, hand).toFixed(2)} ${lerp(10, 0, hand).toFixed(2)})">
+    <ellipse cx="42" cy="99" rx="6" ry="3" fill="#5E4A42"/>
+    <path d="M0 118 Q20 108 38 99 L40 105 Q20 116 0 130 Z" fill="#191C23"/>
+  </g>
+  <rect width="90" height="160" fill="#1B2740" opacity="0.15"/>`;
+}
+
+function s09(lt) {
+  const tabs = [1, 1, 1, 1];
+  const closeAt = [null, 2.8, 1.6, 0.2];
+  let tabSvg = '';
+  for (let i = 0; i < 4; i++) {
+    const w = closeAt[i] === null ? 1 : 1 - ease(seg(lt, closeAt[i], closeAt[i] + 0.3));
+    if (w <= 0.01) continue;
+    const x = 33 + i * 9;
+    tabSvg += `<rect x="${x}" y="42" width="${(8 * w).toFixed(2)}" height="3" rx="0.4" fill="${i === 0 ? '#2B3A55' : '#3E5070'}" opacity="${(0.9 * w + 0.1).toFixed(3)}"/>`;
+  }
+  const amb = lerp(0.35, 1, ease(lt / 5.5));
+  const cap = ease(seg(lt, 4.0, 4.4)) - ease(seg(lt, 4.4, 4.9));
+  return `
+  <defs><linearGradient id="g09" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#1B2740"/><stop offset="0.65" stop-color="#2B3A55"/>
+    <stop offset="1" stop-color="#D08E4C" stop-opacity="${amb.toFixed(3)}"/></linearGradient></defs>
+  <rect width="90" height="160" fill="#0D1525"/>
+  <rect x="0" y="18" width="11" height="74" fill="#1B2740"/>
+  <rect x="0" y="18" width="11" height="74" fill="url(#g09)"/>
+  <rect x="0" y="70" width="16" height="30" fill="#E8A04F" opacity="${(0.12 * amb).toFixed(3)}" filter="url(#bl4)"/>
+  <rect y="98" width="90" height="62" fill="#201B16"/>
+  <ellipse cx="57" cy="64" rx="30" ry="26" fill="#A9C3E0" opacity="0.12" filter="url(#bl8)"/>
+  <path d="M30 40 L82 38 L84 86 L32 88 Z" fill="#9DB4D2" opacity="0.9"/>
+  ${tabSvg}
+  <rect x="36" y="50" width="40" height="30" fill="#E9E3D6" opacity="0.45"/>
+  <path d="M40 56 H66 M40 61 H70 M40 66 H58" stroke="#8FA4C0" stroke-width="0.7" opacity="0.6"/>
+  <path d="M28 90 L86 86 L90 96 L24 100 Z" fill="#424854"/>
+  <g transform="translate(0 18)">
+  <path d="M8 104 L30 102 L32 124 L10 126 Z" fill="#E9E3D6"/>
+  <path d="M30 102 L52 104 L50 126 L32 124 Z" fill="#D9D2C2"/>
+  <path d="M30 102 L32 124" stroke="#B9B2A2" stroke-width="0.4"/>
+  <path d="M12 108 H26" stroke="#8A8378" stroke-width="0.5"/>
+  <g transform="translate(${(cap * 2).toFixed(2)} ${(-cap * 2).toFixed(2)})">
+    <path d="M40 112 L54 102" stroke="#101114" stroke-width="1.4" stroke-linecap="round"/>
+    <ellipse cx="55" cy="101" rx="4" ry="3" fill="#5E4A42"/>
+    <path d="M58 100 Q72 96 90 92 L90 104 Q74 106 58 104 Z" fill="#191C23"/>
+  </g>
+  </g>
+  <rect width="90" height="160" fill="#1B2740" opacity="${lerp(0.2, 0.08, lt / 5.5).toFixed(3)}"/>`;
+}
+
+function s10(lt) {
+  const op = ease(seg(lt, 2.4, 3.8));
+  const reach = ease(seg(lt, 1.6, 2.4));
+  const edge = lerp(46, 68, op);
+  const handX = lerp(44, edge - 0.5, reach), handY = lerp(84, 70, reach);
+  return `
+  <defs><linearGradient id="g10" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#1A2540"/><stop offset="0.5" stop-color="#36405C"/>
+    <stop offset="0.82" stop-color="#B5643A"/><stop offset="1" stop-color="#EDA855"/></linearGradient></defs>
+  <rect width="90" height="160" fill="#0A101C"/>
+  <rect x="10" y="16" width="70" height="84" fill="#E8A04F" opacity="${(0.10 + 0.18 * op).toFixed(3)}" filter="url(#bl8)"/>
+  <rect x="18" y="22" width="54" height="70" fill="url(#g10)"/>
+  <ellipse cx="${lerp(32, 52, op).toFixed(2)}" cy="90" rx="16" ry="4" fill="#FFD9A0" opacity="${(0.25 + 0.35 * op).toFixed(3)}" filter="url(#bl2)"/>
+  <path d="M45 22 V92 M18 57 H72" stroke="#0A101C" stroke-width="1.6"/>
+  <rect x="${edge.toFixed(2)}" y="18" width="${(76 - edge).toFixed(2)}" height="80" fill="#14171E"/>
+  <path d="M${(edge + 3).toFixed(2)} 18 V98 M${(edge + 7).toFixed(2)} 18 V98" stroke="#0E1016" stroke-width="0.8"/>
+  <path d="M12 18 L20 18 Q18.6 56 21.6 98 L12 98 Z" fill="#14171E"/>
+  <polygon points="18,92 ${edge.toFixed(2)},92 ${(edge + 22).toFixed(2)},142 0,142" fill="#E8A04F" opacity="${(0.05 + 0.2 * op).toFixed(3)}" filter="url(#bl1)"/>
+  <rect y="120" width="90" height="40" fill="#0B111D" opacity="0.6"/>
+  <path d="M35 70 Q34 59 40 58 Q46 59 45 70 Z" fill="#08090D"/>
+  <path d="M36 61 L35 57 M39 59 L39 55 M42 59 L44 55.5" stroke="#08090D" stroke-width="1" stroke-linecap="round"/>
+  <path d="M32 69 Q40 66 48 69 L49 96 L31 96 Z" fill="#08090D"/>
+  <path d="M46 71 Q${((46 + handX) / 2).toFixed(2)} ${(Math.min(71, handY) - 1).toFixed(2)} ${handX.toFixed(2)} ${handY.toFixed(2)}" stroke="#08090D" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M34 72 Q32 82 33 90" stroke="#08090D" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <rect x="34" y="96" width="5" height="22" fill="#08090D"/>
+  <rect x="41" y="96" width="5" height="22" fill="#08090D"/>
+  <path d="M40 58 Q46 59 45.4 70" stroke="#F0B060" stroke-width="0.8" fill="none" opacity="${(0.3 + 0.7 * op).toFixed(3)}"/>
+  <path d="M48 69 L49.2 95" stroke="#F0B060" stroke-width="0.6" opacity="${(0.2 + 0.6 * op).toFixed(3)}"/>
+  <rect width="90" height="160" fill="#FFE2B8" opacity="${(0.85 * ease(seg(lt, 5.2, 5.5))).toFixed(3)}"/>`;
+}
+
+function s11(lt) {
+  // inserts at 54.9 / 55.6 / 56.4 (lt 2.9 / 3.6 / 4.4)
+  if (lt >= 4.4) return s11c(lt - 4.4);
+  if (lt >= 3.6) return s11b(lt - 3.6);
+  if (lt >= 2.9) return s11a(lt - 2.9);
+  const flare = 1 - ease(seg(lt, 0, 0.4));
+  const w = Math.sin(lt * 7) * 2.5;
+  return `
+  <defs><linearGradient id="g11" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#C98A4A"/><stop offset="0.45" stop-color="#55465A"/><stop offset="1" stop-color="#182339"/></linearGradient></defs>
+  <rect width="90" height="160" fill="url(#g11)"/>
+  <polygon points="0,26 0,72 90,124 90,84" fill="#F2B060" opacity="0.22" filter="url(#bl2)"/>
+  ${dust(16, 23, 0, 30, 90, 80, lt, '#FFE0B0', 0.6, 0.2)}
+  <g transform="translate(-6 50) scale(0.48)">
+    ${rig({ lean: -3, desk: '#5A4430', leg: '#3E3024', skin: '#7A5C4C', face: '#7A5C4C', notebook: true, armRot: w, backRim: 0.95, backRimColor: '#F2B060' })}
+  </g>
+  <rect y="128" width="90" height="32" fill="#141C2E" opacity="0.45"/>
+  <rect width="90" height="160" fill="#FFE2B8" opacity="${(0.85 * flare).toFixed(3)}"/>`;
+}
+function s11a(t) {
+  const u = ease(t / 0.6);
+  return `
+  <rect width="90" height="160" fill="#3A2C22"/>
+  <polygon points="0,0 90,0 90,60 0,110" fill="#F2B060" opacity="0.18" filter="url(#bl4)"/>
+  <path d="M8 16 L84 12 L86 94 L10 98 Z" fill="#EDE5D3"/>
+  <path d="M8 16 L10 98" stroke="#CFC6B2" stroke-width="0.8"/>
+  <path d="M16 60 H78 M16 69 H74 M16 78 H76 M16 87 H70" stroke="#D8CFBC" stroke-width="0.5"/>
+  <text x="18" y="42" font-family="Inter, sans-serif" font-style="italic" font-weight="700" font-size="13" fill="#2A2420" transform="rotate(-3 40 36)">DAY 001</text>
+  <path d="M18 47 L${lerp(18, 66, u).toFixed(2)} ${lerp(47, 44.6, u).toFixed(2)}" stroke="#2A2420" stroke-width="0.9" stroke-linecap="round" transform="rotate(-3 40 36)"/>
+  <g transform="translate(${(lerp(18, 66, u) - 66).toFixed(2)} 0)">
+    <path d="M66 47 L82 64" stroke="#101114" stroke-width="2.4" stroke-linecap="round"/>
+    <ellipse cx="82" cy="64" rx="9" ry="6.5" fill="#7A5C4C"/>
+    <path d="M86 60 Q100 68 150 80 L150 120 Q100 90 84 72 Z" fill="#1A1D24"/>
+  </g>
+  <rect width="90" height="160" fill="#1B2740" opacity="0.1"/>`;
+}
+function s11b(t) {
+  const k = Math.floor(t / 0.2) % 4;
+  let keys = '';
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) {
+    const hot = (r * 8 + c) % 7 === k;
+    keys += `<rect x="${8 + c * 9.6}" y="${70 + r * 10}" width="8.4" height="8.4" rx="1" fill="${hot ? '#56504A' : '#3A3E46'}"/>`;
+  }
+  return `
+  <rect width="90" height="160" fill="#2A2420"/>
+  <rect x="4" y="66" width="82" height="46" rx="2" fill="#2E3238"/>
+  ${keys}
+  <polygon points="0,40 90,30 90,90 0,140" fill="#F2B060" opacity="0.16" filter="url(#bl4)"/>
+  <g transform="translate(0 ${(Math.sin(t * 18) * 0.8).toFixed(2)})">
+    <ellipse cx="28" cy="80" rx="9" ry="6" fill="#7A5C4C"/>
+    <path d="M0 96 Q12 84 22 82 L30 92 Q14 100 0 112 Z" fill="#1A1D24"/>
+  </g>
+  <g transform="translate(0 ${(Math.sin(t * 18 + 2) * 0.8).toFixed(2)})">
+    <ellipse cx="62" cy="84" rx="9" ry="6" fill="#7A5C4C"/>
+    <path d="M90 100 Q78 88 68 86 L60 96 Q76 104 90 116 Z" fill="#1A1D24"/>
+  </g>
+  <path d="M4 66 L86 66" stroke="#F2B060" stroke-width="0.6" opacity="0.6"/>`;
+}
+function s11c(t) {
+  const u = ease(t / 0.8);
+  const sx = Math.cos(u * Math.PI);
+  return `
+  <rect width="90" height="160" fill="#3A2C22"/>
+  <polygon points="0,0 90,0 90,60 0,110" fill="#F2B060" opacity="0.18" filter="url(#bl4)"/>
+  <path d="M6 14 L45 16 L45 92 L8 90 Z" fill="#E4DBC7"/>
+  <path d="M45 16 L84 14 L82 90 L45 92 Z" fill="#EDE5D3"/>
+  <path d="M14 34 H40 M14 44 H38 M14 54 H40 M14 64 H34" stroke="#8A8378" stroke-width="0.5"/>
+  <g transform="translate(45 0) scale(${sx.toFixed(3)} 1)">
+    <path d="M0 16 L39 ${lerp(14, 20, Math.abs(sx)).toFixed(2)} L37 90 L0 92 Z" fill="${sx > 0 ? '#F2EBDB' : '#E0D7C3'}"/>
+  </g>
+  <g transform="translate(${lerp(10, -30, u).toFixed(2)} 0)">
+    <ellipse cx="80" cy="66" rx="8" ry="6" fill="#7A5C4C"/>
+    <path d="M86 62 Q100 58 150 54 L150 84 Q100 76 86 70 Z" fill="#1A1D24"/>
+  </g>`;
+}
+
+// ---------- TIMELINE ----------
+const SCENES = [
+  [0, 4.5, s01, (p) => ({ s: lerp(1, 1.07, ease(p)) })],
+  [4.5, 10, s02, (p) => ({ s: 1.04, ty: lerp(0, 60, ease(p)) })],
+  [10, 14, s03, (p) => ({ s: lerp(1.06, 1.1, p), rot: lerp(0, 3, ease(p)), ty: lerp(0, -20, p) })],
+  [14, 20.5, s04, (p, lt) => ({ s: lerp(1.08, 1.0, ease(lt / 4)) })],
+  [20.5, 26.5, s05, (p) => ({ s: lerp(1.0, 1.03, ease(p)) })],
+  [26.5, 30.5, s06, () => ({ s: 1.0 })],
+  [30.5, 35.6, s07, (p) => ({ s: lerp(1.12, 1.0, ease(p)) })],
+  [35.6, 41, s08, (p) => ({ s: 1.04, tx: lerp(24, -24, p) })],
+  [41, 46.5, s09, (p) => ({ s: lerp(1.0, 1.06, ease(p)) })],
+  [46.5, 52, s10, (p, lt) => ({ s: lerp(1.0, 1.04, ease(seg(lt, 2.5, 5.5))) })],
+  [52, 57.4, s11, (p, lt) => (lt < 2.9 ? { s: lerp(1.0, 1.05, ease(lt / 2.9)), ty: lerp(0, -30, ease(lt / 2.9)) } : { s: 1.02 })],
+];
+
+function sceneSvg(i, t, opacity = 1) {
+  const [a, b, fn, cam] = SCENES[i];
+  const lt = t - a, p = clamp(lt / (b - a));
+  const c = cam(p, lt);
+  const s = c.s || 1, tx = c.tx || 0, ty = c.ty || 0, rot = c.rot || 0;
+  return `<g opacity="${opacity}" transform="translate(${540 + tx} ${960 + ty}) rotate(${rot}) scale(${s}) translate(-540 -960)"><g transform="scale(12)">${fn(lt)}</g></g>`;
+}
+
+function endCard(t) {
+  const f = ease(seg(t, 58.8, 59.3));
+  return `<rect width="1080" height="1920" fill="#06080D"/>
+  <g opacity="${f.toFixed(3)}" font-family="Inter, sans-serif" text-anchor="middle">
+    <text x="540" y="700" font-size="30" font-weight="500" letter-spacing="9" fill="#8E9AB0">EPISODE <tspan fill="#E8A04F">001</tspan></text>
+    <text x="540" y="790" font-size="50" font-weight="800" fill="#F5F3EE">I'm 19, and I haven't</text>
+    <text x="540" y="852" font-size="50" font-weight="800" fill="#F5F3EE">made it yet.</text>
+    <text x="540" y="960" font-size="28" font-weight="500" fill="#8E9AB0">Next: too many ideas, not enough results</text>
+  </g>`;
+}
+
+const CUES = [
+  [0.5,1.8,"I'm <em>19</em> years old."],[2.3,3.3,'And honestly…'],[3.3,4.4,"I haven't made it <em>yet.</em>"],
+  [4.6,6.2,"I've tried building businesses."],[6.4,7.9,"I've spent nights on ideas"],[7.9,8.8,'I genuinely believed'],[8.8,9.8,'would change my life.'],
+  [10.1,11.4,"Some things didn't work."],[11.8,13.2,'Some plans <em>fell apart.</em>'],
+  [14.2,14.9,'And sometimes'],[14.9,16.1,'I was so busy building,'],[16.1,17.4,'I forgot to ask myself…'],[18.1,19.2,'Am I even building'],[19.2,20.3,'the <em>right thing?</em>'],
+  [20.9,21.8,'The hardest part'],[21.8,22.8,"isn't losing money."],[23.1,24.6,"It's watching <em>time</em> pass"],[24.6,25.3,"while you're still"],[25.3,26.2,'figuring it all out.'],
+  [26.6,28.1,'Watching people move ahead'],[28.1,29.6,"while you're <em>starting over</em> again."],
+  [30.9,31.9,"But maybe that's the part"],[31.9,32.9,'<em>nobody talks about.</em>'],[33.1,34.3,'The stage where you have'],[34.3,35.6,'no success story to tell.'],
+  [35.9,37.2,'No big results to show.'],[37.5,38.4,'Just a laptop,'],[38.4,39.5,'a thousand doubts,'],[39.5,40.8,'and <em>a reason to keep going.</em>'],
+  [41.2,42.3,"I'm still a student."],[42.6,43.5,"I'm still learning."],[43.8,44.9,"And I'm still trying"],[44.9,46.2,'to build something <em>real.</em>'],
+  [46.8,47.5,"I don't know"],[47.5,48.6,'how this story ends.'],[49.0,50.3,"But I'm <em>done pretending</em>"],[50.3,51.7,'I have everything figured out.'],
+  [52.3,53.3,'This is <em>day one</em>'],[53.3,54.6,'of documenting the journey.'],[54.9,55.6,'The failures.'],[55.6,56.4,'The lessons.'],[56.4,57.2,'The work.'],
+  [57.5,58.4,"Let's see if I can"],[58.4,59.4,'<em>actually make it.</em>']
+];
+const LOW = [[14, 20.5], [30.5, 35.6], [46.5, 52]];
+
+const art = document.getElementById('art');
+const cap = document.getElementById('cap');
+const gctx = document.getElementById('grain').getContext('2d');
+const gimg = gctx.createImageData(540, 960);
+let gseed = 1;
+function grain() {
+  const d = gimg.data;
+  for (let i = 0; i < d.length; i += 4) {
+    gseed = (gseed * 1103515245 + 12345) & 0x7fffffff;
+    const v = (gseed >> 16) & 255;
+    d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+  }
+  gctx.putImageData(gimg, 0, 0);
+}
+
+window.render = function (t) {
+  let body = '';
+  if (t >= 57.4) body = endCard(t);
+  else {
+    let i = SCENES.findIndex(([a, b]) => t >= a && t < b);
+    if (i < 0) i = SCENES.length - 1;
+    body = sceneSvg(i, t);
+    if (i === 7 && t < 36.1) body = sceneSvg(6, t) + sceneSvg(7, t, ease((t - 35.6) / 0.5).toFixed(3));
+  }
+  art.innerHTML = DEFS + body;
+  const c = CUES.find(([a, b]) => t >= a && t < b);
+  if (c) {
+    const fade = Math.min(ease((t - c[0]) / 0.125), ease((c[1] - t) / 0.125));
+    cap.innerHTML = c[2];
+    cap.style.opacity = fade;
+    cap.style.top = (LOW.some(([a, b]) => t >= a && t < b) ? 1340 : 1240) + 'px';
+  } else cap.style.opacity = 0;
+  grain();
+};
+window.render(0);
+</script>
+</body>
+</html>
