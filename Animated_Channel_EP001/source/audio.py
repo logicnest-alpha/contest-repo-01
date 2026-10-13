@@ -40,7 +40,7 @@ def hz(m): return 440 * 2 ** ((m - 69) / 12)
 # ---------- room tone (0 – 57.4) ----------
 brown = np.cumsum(rng.standard_normal(N)); brown -= lp_fast(brown, 8); brown /= np.max(np.abs(brown))
 room = lp_fast(brown, 400) * 0.9 + 0.02 * np.sin(2 * np.pi * 50 * t)
-room *= (t < 57.4) * np.minimum(1, t / 1.0)
+room *= (t < 57.8) * np.minimum(1, t / 1.0)
 place(room / np.max(np.abs(room)), 0, -36)
 
 # ---------- music ----------
@@ -85,7 +85,7 @@ music = mus / np.max(np.abs(mus)) + 0.55 * pad / np.max(np.abs(pad))
 gate = np.ones(N)
 gate[(t >= 18.0) & (t < 20.3)] = 0
 i0 = int(17.85 * SR); gate[i0:int(18.0 * SR)] = np.linspace(1, 0, int(18.0 * SR) - i0)
-gate[(t >= 57.4) & (t < 59.0)] = 0
+gate[(t >= 57.8) & (t < 59.0)] = 0
 music *= gate
 music *= np.where(t < 46.5, 1.0, 1.0 + 0.35 * np.clip((t - 46.5) / 10, 0, 1))
 place(music / np.max(np.abs(music)), 0, -15)
@@ -112,8 +112,8 @@ for k2 in np.arange(26.6, 30.4, 0.52): place(burst(0.08, 100, 800, 40), k2, -33,
 wh = burst(1.4, 100, 1200, 1.2) * env(int(1.4 * SR), 0.7, 0.7); place(wh, 30.1, -28)       # whoosh
 shim = sum(np.sin(2 * np.pi * f * np.arange(int(2.5 * SR)) / SR) for f in [2093, 2637, 3136]) / 3
 place(shim * np.exp(-np.arange(len(shim)) / SR * 1.5) * env(len(shim), 0.3, 0.3), 38.4, -34)
-for k2 in [41.2, 42.6, 43.8]: place(click(), k2, -26)                                       # tabs
-place(click() * 1.2, 45.2, -22)                                                              # pen cap
+for k2 in [42.12, 43.44, 44.64]: place(click(), k2, -26)                                       # tabs
+place(click() * 1.2, 45.6, -22)                                                              # pen cap
 cre = np.sin(2 * np.pi * (180 + 60 * np.sin(np.arange(int(.5 * SR)) / SR * 9)) * np.arange(int(.5 * SR)) / SR)
 place(bp_fast(cre * rng.uniform(.6, 1, len(cre)), 120, 900) * env(len(cre), .05, .2), 46.6, -30)
 cur = burst(0.9, 1000, 6000, 1.0) * env(int(0.9 * SR), 0.15, 0.3); place(cur, 48.9, -25)    # curtain
@@ -122,10 +122,10 @@ for k2 in [50.2, 51.1, 52.6, 53.4, 54.4, 56.0, 56.9]:                           
     ch = np.sin(2 * np.pi * (3200 + 1400 * np.sin(tt * 60)) * tt) * env(n, .01, .06)
     place(ch, k2, -36, 0.6); place(ch, k2 + 0.16, -38, 0.6)
 for k2 in np.arange(52.3, 54.8, 0.21): place(burst(0.09, 2000, 7000, 30), k2, -32)        # pencil
-place(burst(0.5, 2000, 7000, 8), 54.9, -26); place(click(), 55.7, -24); place(burst(0.5, 600, 6000, 6), 56.5, -24)
+place(burst(0.5, 2000, 7000, 8), 54.9, -26); place(click(), 56.0, -24); place(burst(0.5, 600, 6000, 6), 57.1, -24)
 
 # ---------- master ----------
-mix[int(57.4 * SR):int(59.0 * SR)] *= 0
+mix[int(57.8 * SR):int(59.0 * SR)] *= 0
 peak = np.max(np.abs(mix)); mix = mix / peak * db(-2.0)
 rms = np.sqrt(np.mean(mix ** 2)); print('rms dBFS', 20 * np.log10(rms))
 fade = np.ones(N); fade[-int(0.25 * SR):] = np.linspace(1, 0, int(0.25 * SR)); mix *= fade[:, None]

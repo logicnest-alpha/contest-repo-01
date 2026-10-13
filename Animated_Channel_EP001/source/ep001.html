@@ -349,7 +349,7 @@ function s08(lt) {
 
 function s09(lt) {
   const tabs = [1, 1, 1, 1];
-  const closeAt = [null, 2.8, 1.6, 0.2];
+  const closeAt = [null, 3.64, 2.44, 1.12];
   let tabSvg = '';
   for (let i = 0; i < 4; i++) {
     const w = closeAt[i] === null ? 1 : 1 - ease(seg(lt, closeAt[i], closeAt[i] + 0.3));
@@ -358,7 +358,7 @@ function s09(lt) {
     tabSvg += `<rect x="${x}" y="42" width="${(8 * w).toFixed(2)}" height="3" rx="0.4" fill="${i === 0 ? '#2B3A55' : '#3E5070'}" opacity="${(0.9 * w + 0.1).toFixed(3)}"/>`;
   }
   const amb = lerp(0.35, 1, ease(lt / 5.5));
-  const cap = ease(seg(lt, 4.0, 4.4)) - ease(seg(lt, 4.4, 4.9));
+  const cap = ease(seg(lt, 4.6, 4.9)) - ease(seg(lt, 4.9, 5.4));
   return `
   <defs><linearGradient id="g09" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="#1B2740"/><stop offset="0.65" stop-color="#2B3A55"/>
@@ -421,8 +421,8 @@ function s10(lt) {
 
 function s11(lt) {
   // inserts at 54.9 / 55.6 / 56.4 (lt 2.9 / 3.6 / 4.4)
-  if (lt >= 4.4) return s11c(lt - 4.4);
-  if (lt >= 3.6) return s11b(lt - 3.6);
+  if (lt >= 5.04) return s11c(lt - 5.04);
+  if (lt >= 3.95) return s11b(lt - 3.95);
   if (lt >= 2.9) return s11a(lt - 2.9);
   const flare = 1 - ease(seg(lt, 0, 0.4));
   const w = Math.sin(lt * 7) * 2.5;
@@ -507,7 +507,7 @@ const SCENES = [
   [35.6, 41, s08, (p) => ({ s: 1.04, tx: lerp(24, -24, p) })],
   [41, 46.5, s09, (p) => ({ s: lerp(1.0, 1.06, ease(p)) })],
   [46.5, 52, s10, (p, lt) => ({ s: lerp(1.0, 1.04, ease(seg(lt, 2.5, 5.5))) })],
-  [52, 57.4, s11, (p, lt) => (lt < 2.9 ? { s: lerp(1.0, 1.05, ease(lt / 2.9)), ty: lerp(0, -30, ease(lt / 2.9)) } : { s: 1.02 })],
+  [52, 57.8, s11, (p, lt) => (lt < 2.9 ? { s: lerp(1.0, 1.05, ease(lt / 2.9)), ty: lerp(0, -30, ease(lt / 2.9)) } : { s: 1.02 })],
 ];
 
 function sceneSvg(i, t, opacity = 1) {
@@ -530,18 +530,50 @@ function endCard(t) {
 }
 
 const CUES = [
-  [0.5,1.8,"I'm <em>19</em> years old."],[2.3,3.3,'And honestly…'],[3.3,4.4,"I haven't made it <em>yet.</em>"],
-  [4.6,6.2,"I've tried building businesses."],[6.4,7.9,"I've spent nights on ideas"],[7.9,8.8,'I genuinely believed'],[8.8,9.8,'would change my life.'],
-  [10.1,11.4,"Some things didn't work."],[11.8,13.2,'Some plans <em>fell apart.</em>'],
-  [14.2,14.9,'And sometimes'],[14.9,16.1,'I was so busy building,'],[16.1,17.4,'I forgot to ask myself…'],[18.1,19.2,'Am I even building'],[19.2,20.3,'the <em>right thing?</em>'],
-  [20.9,21.8,'The hardest part'],[21.8,22.8,"isn't losing money."],[23.1,24.6,"It's watching <em>time</em> pass"],[24.6,25.3,"while you're still"],[25.3,26.2,'figuring it all out.'],
-  [26.6,28.1,'Watching people move ahead'],[28.1,29.6,"while you're <em>starting over</em> again."],
-  [30.9,31.9,"But maybe that's the part"],[31.9,32.9,'<em>nobody talks about.</em>'],[33.1,34.3,'The stage where you have'],[34.3,35.6,'no success story to tell.'],
-  [35.9,37.2,'No big results to show.'],[37.5,38.4,'Just a laptop,'],[38.4,39.5,'a thousand doubts,'],[39.5,40.8,'and <em>a reason to keep going.</em>'],
-  [41.2,42.3,"I'm still a student."],[42.6,43.5,"I'm still learning."],[43.8,44.9,"And I'm still trying"],[44.9,46.2,'to build something <em>real.</em>'],
-  [46.8,47.5,"I don't know"],[47.5,48.6,'how this story ends.'],[49.0,50.3,"But I'm <em>done pretending</em>"],[50.3,51.7,'I have everything figured out.'],
-  [52.3,53.3,'This is <em>day one</em>'],[53.3,54.6,'of documenting the journey.'],[54.9,55.6,'The failures.'],[55.6,56.4,'The lessons.'],[56.4,57.2,'The work.'],
-  [57.5,58.4,"Let's see if I can"],[58.4,59.4,'<em>actually make it.</em>']
+  [0.5,1.84,"I'm <em>19</em> years old."],
+  [2.3,3.14,'And honestly…'],
+  [3.14,4.05,"I haven't made it <em>yet.</em>"],
+  [4.6,6.35,"I've tried building businesses."],
+  [6.53,8.25,"I've spent nights on ideas"],
+  [8.25,9.28,'I genuinely believed'],
+  [9.28,10.42,'would change my life.'],
+  [10.6,11.95,"Some things didn't work."],
+  [12.13,13.48,'Some plans <em>fell apart.</em>'],
+  [14.2,15.01,'And sometimes'],
+  [15.01,16.39,'I was so busy building,'],
+  [16.39,17.89,'I forgot to ask myself…'],
+  [18.1,18.89,'Am I even building'],
+  [18.89,19.68,'the <em>right thing?</em>'],
+  [20.9,21.86,'The hardest part'],
+  [21.86,22.93,"isn't losing money."],
+  [23.11,24.67,"It's watching <em>time</em> pass"],
+  [24.67,25.4,"while you're still"],
+  [25.4,26.34,'figuring it all out.'],
+  [26.6,28.16,'Watching people move ahead'],
+  [28.16,29.71,"while you're <em>starting over</em> again."],
+  [30.9,32.02,"But maybe that's the part"],
+  [32.02,33.13,'<em>nobody talks about.</em>'],
+  [33.31,34.7,'The stage where you have'],
+  [34.7,36.2,'no success story to tell.'],
+  [36.38,37.94,'No big results to show.'],
+  [38.12,39.12,'Just a laptop,'],
+  [39.12,40.34,'a thousand doubts,'],
+  [40.34,41.79,'and <em>a reason to keep going.</em>'],
+  [41.97,43.11,"I'm still a student."],
+  [43.29,44.31,"I'm still learning."],
+  [44.49,45.44,"And I'm still trying"],
+  [45.44,46.56,'to build something <em>real.</em>'],
+  [46.8,47.51,"I don't know"],
+  [47.51,48.62,'how this story ends.'],
+  [49.0,50.33,"But I'm <em>done pretending</em>"],
+  [50.33,51.77,'I have everything figured out.'],
+  [52.3,53.35,'This is <em>day one</em>'],
+  [53.35,54.72,'of documenting the journey.'],
+  [54.9,55.77,'The failures.'],
+  [55.89,56.86,'The lessons.'],
+  [57.0,57.66,'The work.'],
+  [57.92,58.86,"Let's see if I can"],
+  [58.86,59.9,'<em>actually make it.</em>']
 ];
 const LOW = [[14, 20.5], [30.5, 35.6], [46.5, 52]];
 
@@ -562,7 +594,7 @@ function grain() {
 
 window.render = function (t) {
   let body = '';
-  if (t >= 57.4) body = endCard(t);
+  if (t >= 57.8) body = endCard(t);
   else {
     let i = SCENES.findIndex(([a, b]) => t >= a && t < b);
     if (i < 0) i = SCENES.length - 1;
