@@ -1,0 +1,112 @@
+[
+ [
+  "hook",
+  "Most cold emails never reach a human.",
+  "Most cold emails | never reach a <em>human.</em>"
+ ],
+ [
+  "hook",
+  "They land in spam, before anyone reads a word.",
+  "They land in <em>spam</em> | before anyone reads a word."
+ ],
+ [
+  "setup",
+  "So before you write anything, fix the setup.",
+  "So before you write anything, | <em>fix the setup.</em>"
+ ],
+ [
+  "setup",
+  "Buy a separate domain. Never send from your main one.",
+  "Buy a <em>separate domain.</em> | Never send from your main one."
+ ],
+ [
+  "setup",
+  "Set up S P F, D-Kim, and D-Mark.",
+  "Set up <em>SPF, DKIM</em> and <em>DMARC.</em>"
+ ],
+ [
+  "setup",
+  "Warm up each inbox, for two weeks.",
+  "<em>Warm up</em> each inbox | for two weeks."
+ ],
+ [
+  "setup",
+  "Then send thirty emails a day, per inbox. Not three hundred.",
+  "Then send <em>30 emails a day</em> | per inbox. Not 300."
+ ],
+ [
+  "list",
+  "Verify every address, before you send.",
+  "<em>Verify</em> every address | before you send."
+ ],
+ [
+  "list",
+  "Bounces hurt your reputation, faster than bad copy.",
+  "Bounces hurt your reputation | faster than bad copy."
+ ],
+ [
+  "email",
+  "Now, the email. Under eighty words. Plain text. No images. No links.",
+  "Now, the email. | <em>Under 80 words.</em> | Plain text. | No images. No links."
+ ],
+ [
+  "email",
+  "Open with something true about them. Not about you.",
+  "Open with something | <em>true about them.</em> | Not about you."
+ ],
+ [
+  "email",
+  "Name one problem you think they have.",
+  "Name <em>one problem</em> | you think they have."
+ ],
+ [
+  "email",
+  "Then ask a small question. Not for a meeting.",
+  "Then ask a <em>small question.</em> | Not for a meeting."
+ ],
+ [
+  "email",
+  "Worth a look? beats, can we hop on a call?",
+  "“Worth a look?” beats | “Can we hop on a call?”"
+ ],
+ [
+  "follow",
+  "Most replies come from follow-ups.",
+  "Most replies come | from <em>follow-ups.</em>"
+ ],
+ [
+  "follow",
+  "Send three, a few days apart.",
+  "Send <em>three,</em> a few days apart."
+ ],
+ [
+  "follow",
+  "Each one adds something new. Never just, bumping this.",
+  "Each one adds <em>something new.</em> | Never just “bumping this.”"
+ ],
+ [
+  "truth",
+  "But here's what I'm learning.",
+  "But here's what I'm learning."
+ ],
+ [
+  "truth",
+  "Sending messages isn't the same as earning trust.",
+  "Sending messages isn't | the same as <em>earning trust.</em>"
+ ],
+ [
+  "truth",
+  "Nobody owes you a reply. Your job is to make one worth sending.",
+  "Nobody owes you a reply. | Your job is to make one | <em>worth sending.</em>"
+ ],
+ [
+  "end",
+  "The scripts are in the caption.",
+  "The <em>scripts</em> are in the caption."
+ ],
+ [
+  "end",
+  "Follow along, to see what actually happens.",
+  "Follow along to see | what <em>actually happens.</em>"
+ ]
+]
