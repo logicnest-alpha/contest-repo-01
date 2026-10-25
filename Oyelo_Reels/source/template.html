@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Oyelo reel render</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #000; }
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #06080D; }
+  #art { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+  #grain { position: absolute; inset: 0; width: 1080px; height: 1920px; opacity: 0.08; mix-blend-mode: overlay; pointer-events: none; }
+  #vig { position: absolute; inset: 0; background: radial-gradient(ellipse 75% 60% at 50% 48%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.45) 100%); pointer-events: none; }
+  #cap { position: absolute; left: 70px; right: 70px; top: 1290px; text-align: center; font-family: 'Inter', sans-serif; font-weight: 800; font-size: 62px; line-height: 1.12; letter-spacing: -0.01em; color: #F5F3EE; text-shadow: 0 2px 14px rgba(0,0,0,0.75), 0 0 2px rgba(0,0,0,0.5); transform: translateY(-50%); }
+  #cap em { font-style: normal; color: #E8A04F; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="art" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div id="vig"></div>
+  <canvas id="grain" width="540" height="960"></canvas>
+  <div id="cap"></div>
+</div>
+<script>
+const REEL = __REEL__;
+const TMD = __TIMING__;
+const CUES = __CUES__;
+const TITLE = __TITLE__;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+const lerp = (a, b, x) => a + (b - a) * x;
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const R = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const L = (i) => TMD.lines[i].start, LE = (i) => TMD.lines[i].end, D = (i) => LE(i) - L(i);
+const mid = (a, b) => (LE(a) + L(b)) / 2;
+const F = 'font-family="Inter, sans-serif"';
+const MONO = 'font-family="DejaVu Sans Mono, monospace"';
+const rv = (t, a, d = 0.45) => ease(seg(t, a, a + d));
+const up = (k, dy = 2.5) => `transform="translate(0 ${((1 - k) * dy).toFixed(2)})" opacity="${k.toFixed(3)}"`;
+const AMB = '#E8A04F', PAPER = '#E9E3D6', INK = '#1A1D24';
+
+function dust(n, seed, x0, y0, w, h, t, color, op, r) {
+  let s = '';
+  for (let i = 0; i < n; i++) {
+    const a = R(seed * 31 + i * 7.13), b = R(seed * 17 + i * 3.71), c = R(seed * 5 + i * 9.27), d = R(seed * 11 + i * 1.93);
+    const px = x0 + a * w + Math.sin(t * 0.5 + i * 1.7) * 1.1;
+    const py = y0 + (((b * h - t * (0.6 + c * 1.2)) % h) + h) % h;
+    const o = op * (0.35 + 0.65 * d) * (0.65 + 0.35 * Math.sin(t * 1.7 + i));
+    s += `<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${(r * (0.5 + c)).toFixed(2)}" fill="${color}" opacity="${o.toFixed(3)}"/>`;
+  }
+  return s;
+}
+const DEFS = `<defs>
+  <filter id="bl05" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="0.5"/></filter>
+  <filter id="bl1" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1"/></filter>
+  <filter id="bl2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2"/></filter>
+  <filter id="bl4" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>
+  <filter id="bl8" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="8"/></filter>
+</defs>`;
+const txt = (x, y, s, fs, fill, w = 700, anchor = 'start', extra = '') =>
+  `<text x="${x}" y="${y}" text-anchor="${anchor}" ${F} font-weight="${w}" font-size="${fs}" fill="${fill}" ${extra}>${s}</text>`;
+function chip(cx, y, w, label, k, o = {}) {
+  const fill = o.amber ? AMB : (o.paper ? PAPER : (o.green ? '#1F5A4A' : '#1A2438'));
+  const col = o.amber ? '#1A1208' : (o.paper ? INK : (o.green ? '#DFF3EA' : '#B9C2D2'));
+  const st = o.strike || 0;
+  return `<g opacity="${k.toFixed(3)}" transform="translate(0 ${((1 - k) * 1.5).toFixed(2)})">
+    <rect x="${cx - w / 2}" y="${y - 3.4}" width="${w}" height="5.8" rx="2.9" fill="${fill}" ${o.amber || o.paper || o.green ? '' : 'stroke="#3E5070" stroke-width="0.3"'}/>
+    ${txt(cx, y + 0.5, label, o.fs || 2.6, col, o.amber ? 800 : 700, 'middle')}
+    ${st > 0 ? `<path d="M${cx - w / 2 + 2} ${y - 0.4} L${(cx - w / 2 + 2 + (w - 4) * st).toFixed(2)} ${y - 0.4}" stroke="#B5643A" stroke-width="0.6"/>` : ''}</g>`;
+}
+function stars(x, y, n, fillN, size = 2.2, gap = 2.8) {
+  let s = '';
+  for (let i = 0; i < n; i++) {
+    const cx = x + i * gap, on = fillN > i + 0.5;
+    const pts = []; for (let j = 0; j < 10; j++) { const r = j % 2 ? size * 0.42 : size; const a = -Math.PI / 2 + j * Math.PI / 5; pts.push(`${(cx + Math.cos(a) * r).toFixed(2)},${(y + Math.sin(a) * r).toFixed(2)}`); }
+    s += `<polygon points="${pts.join(' ')}" fill="${on ? AMB : '#3A4458'}"/>`;
+  }
+  return s;
+}
+
+// ---------- people ----------
+function person(x, y, s, o = {}) {
+  const c = o.color || '#191C23', ph = o.walk ? Math.sin(o.walk * 9) : 0;
+  return `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${s})" opacity="${(o.op ?? 1).toFixed(3)}">
+    <path d="M-1.6 -1 L${(-1.4 + ph * 0.9).toFixed(2)} 6 L${(-0.4 + ph * 0.9).toFixed(2)} 6 L-0.2 -1 Z" fill="${c}"/>
+    <path d="M1.6 -1 L${(1.4 - ph * 0.9).toFixed(2)} 6 L${(0.4 - ph * 0.9).toFixed(2)} 6 L0.2 -1 Z" fill="${c}"/>
+    <path d="M-2.6 -8 Q0 -9.4 2.6 -8 L2.4 -0.6 L-2.4 -0.6 Z" fill="${c}"/>
+    <circle cx="0" cy="-10.8" r="2" fill="${c}"/>
+    ${o.phone ? `<rect x="0.8" y="-6.4" width="1.6" height="2.4" rx="0.3" fill="#A9C3E0"/><ellipse cx="1.6" cy="-8" rx="3" ry="3" fill="#A9C3E0" opacity="0.18" filter="url(#bl1)"/>` : ''}
+    ${o.rim ? `<path d="M1.8 -12 Q2.6 -10.6 1.9 -9.4" stroke="${o.rim}" stroke-width="0.35" fill="none"/>` : ''}
+  </g>`;
+}
+function seated(x, y, s, o = {}) {
+  const c = o.color || '#191C23';
+  return `<g transform="translate(${x} ${y}) scale(${s})" opacity="${(o.op ?? 1).toFixed(3)}">
+    <path d="M-2.6 -7 Q0 -8.4 2.6 -7 L2.6 0 L-2.6 0 Z" fill="${c}"/><circle cx="0" cy="-9.6" r="2" fill="${c}"/>
+    ${o.phone ? `<rect x="1" y="-5.4" width="1.5" height="2.2" rx="0.3" fill="#A9C3E0"/><ellipse cx="1.8" cy="-6.6" rx="3" ry="3" fill="#A9C3E0" opacity="0.2" filter="url(#bl1)"/>` : ''}</g>`;
+}
+
+// ---------- interior ----------
+function interior(t, o = {}) {
+  const warm = o.warm || 0;
+  const wall = warm > 0.5 ? '#2A2028' : '#0E1626', floor = warm > 0.5 ? '#1C1612' : '#0B1220';
+  const lamp = warm ? AMB : '#5B7BA6';
+  const door = o.door || 0;
+  return `
+  <rect width="90" height="160" fill="${wall}"/>
+  <rect y="112" width="90" height="48" fill="${floor}"/>
+  ${[22, 46, 70].map((x) => `<path d="M${x} 0 V18" stroke="#2A3346" stroke-width="0.3"/><path d="M${x - 3} 18 L${x + 3} 18 L${x + 1.6} 15 L${x - 1.6} 15 Z" fill="#2A3346"/>
+    <ellipse cx="${x}" cy="22" rx="10" ry="8" fill="${lamp}" opacity="${(0.08 + 0.18 * warm).toFixed(3)}" filter="url(#bl4)"/><circle cx="${x}" cy="18.6" r="0.9" fill="${lamp}" opacity="${(0.5 + 0.5 * warm).toFixed(3)}"/>`).join('')}
+  <rect x="8" y="30" width="22" height="16" rx="1" fill="#141E33" stroke="#24314A" stroke-width="0.4"/>
+  ${txt(19, 37, 'MENU', 2.2, '#5E6B82', 700, 'middle', 'letter-spacing="0.4"')}
+  <path d="M11 40 H27 M11 42.6 H24" stroke="#24314A" stroke-width="0.5"/>
+  <rect x="70" y="52" width="16" height="60" fill="#151E30"/>
+  <rect x="71" y="53" width="${(14 * door).toFixed(2)}" height="59" fill="${warm ? '#F2B060' : '#A9C3E0'}" opacity="${(0.35 * door).toFixed(3)}"/>
+  <rect x="${(71 + 14 * door).toFixed(2)}" y="53" width="${(14 * (1 - door)).toFixed(2)}" height="59" fill="#1B2840"/>
+  ${txt(78, 49, 'OPEN', 1.9, warm ? AMB : '#5E6B82', 800, 'middle', 'letter-spacing="0.4"')}
+  ${o.owner !== false ? `${person(18, 76, 1.05, { color: '#20242C', rim: warm ? AMB : null })}<path d="M16.2 69 L19.8 69 L19.6 76 L16.4 76 Z" fill="#3A4A66" opacity="0.9"/>` : ''}
+  <rect x="4" y="80" width="30" height="3" fill="${warm ? '#4A3626' : '#2E251C'}"/>
+  <rect x="5" y="83" width="28" height="29" fill="${warm ? '#2E2219' : '#1C1814'}"/>
+  ${o.extra || ''}`;
+}
+function table(x, y, o = {}) {
+  return `<rect x="${x - 10}" y="${y}" width="20" height="1.8" rx="0.6" fill="#33291F"/><rect x="${x - 0.6}" y="${y + 1.8}" width="1.2" height="14" fill="#221B15"/>
+  ${o.qr ? `<g transform="translate(${x - 1.6} ${y - 4.2})"><rect width="3.2" height="4.2" rx="0.3" fill="${PAPER}"/><rect x="0.5" y="0.5" width="2.2" height="2.2" fill="${INK}"/><rect x="0.9" y="0.9" width="0.6" height="0.6" fill="${PAPER}"/><rect x="1.7" y="1.7" width="0.6" height="0.6" fill="${PAPER}"/></g>` : ''}`;
+}
+function walkTo(t, t0, dur, x0, y0, x1, y1, s = 1, o = {}) {
+  const k = seg(t, t0, t0 + dur);
+  if (t < t0 && !o.before) return '';
+  const fade = o.fadeEnd === false ? 1 : 1 - ease(seg(k, 0.82, 1));
+  const fin = o.fadeIn ? ease(seg(k, 0, 0.15)) : 1;
+  return person(lerp(x0, x1, k), lerp(y0, y1, k), s, { ...o, walk: k < 1 && k > 0 ? t : 0, op: fade * fin * (o.op ?? 1) });
+}
+
+// ---------- street ----------
+function street(t, o = {}) {
+  const shops = o.shops || [['GYM', 0], ['YOUR CAFÉ', 0], ['SALON', 0]];
+  let s = `<rect width="90" height="160" fill="#070B14"/>
+  ${dust(20, 3, 0, 0, 90, 36, t, '#C9D8EE', 0.35, 0.18)}
+  <rect y="104" width="90" height="10" fill="#1A2234"/><rect y="114" width="90" height="46" fill="#0B1220"/>
+  <path d="M0 136 H90" stroke="#2A3346" stroke-width="0.6" stroke-dasharray="4 3"/>`;
+  shops.forEach(([name, lit, hl], i) => {
+    const x = 3 + i * 29, w = 26, glow = lit;
+    s += `<rect x="${x}" y="40" width="${w}" height="64" fill="${hl ? '#1D2B47' : '#121B2D'}"/>
+      <rect x="${x - 1}" y="${44}" width="${w + 2}" height="7" fill="${hl ? AMB : '#24314A'}"/>
+      ${txt(x + w / 2, 48.8, name, 2.3, hl ? '#1A1208' : '#B9C2D2', 800, 'middle', 'letter-spacing="0.3"')}
+      <rect x="${x + 3}" y="58" width="${w - 6}" height="18" fill="${glow > 0.1 ? '#F2B060' : '#1B2840'}" opacity="${(0.25 + 0.6 * glow).toFixed(3)}"/>
+      <ellipse cx="${x + w / 2}" cy="67" rx="${w / 2 + 3}" ry="14" fill="#E8A04F" opacity="${(0.18 * glow).toFixed(3)}" filter="url(#bl4)"/>
+      <rect x="${x + w / 2 - 3.5}" y="82" width="7" height="22" fill="#0E1626"/>`;
+  });
+  return s + (o.extra || '');
+}
+
+// ---------- devices ----------
+let PID = 0;
+function phone(cx, cy, s, inner, bg = '#0E1621') {
+  const id = 'pc' + (PID++);
+  return `<g transform="translate(${(cx - 16 * s).toFixed(2)} ${(cy - 32 * s).toFixed(2)}) scale(${s})">
+    <rect x="-0.6" y="0.4" width="33.2" height="65" rx="4.6" fill="#000" opacity="0.45" filter="url(#bl1)"/>
+    <rect width="32" height="64" rx="4.4" fill="#1A1E26" stroke="#3B414C" stroke-width="0.4"/>
+    <clipPath id="${id}"><rect x="1.5" y="3" width="29" height="58" rx="2.6"/></clipPath>
+    <g clip-path="url(#${id})"><g transform="translate(1.5 3)"><rect width="29" height="58" fill="${bg}"/>${inner}</g></g>
+    <rect x="12.5" y="1.3" width="7" height="1" rx="0.5" fill="#0B0D12"/></g>`;
+}
+function waHead(name, sub = 'WhatsApp') {
+  return `<rect width="29" height="7.4" fill="#16302A"/><circle cx="4.2" cy="3.9" r="2.3" fill="${AMB}"/>${txt(4.2, 4.8, name[0], 2.2, '#1A1208', 800, 'middle')}
+    ${txt(8, 3.6, name, 2, '#E6E9EF', 800)}${txt(8, 6, sub, 1.4, '#8FBFAE', 600)}`;
+}
+function bub(y, lines, k, side = 'in', o = {}) {
+  const w = o.w || Math.min(25, Math.max(...lines.map((l) => l.length)) * 0.92 + 3.4), h = lines.length * 2.7 + 2.2;
+  const x = side === 'in' ? 1.6 : 29 - 1.6 - w;
+  const fill = side === 'in' ? '#1E2A3A' : '#1F5A4A';
+  return `<g ${up(k, 1.2)}><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.4" fill="${fill}"/>
+    ${lines.map((l, i) => txt(x + 1.6, y + 3 + i * 2.7, l, 1.75, '#E6E9EF', 500)).join('')}${o.after || ''}</g>`;
+}
+function tablet(cx, cy, s, inner) {
+  return `<g transform="translate(${cx - 30 * s} ${cy - 21 * s}) scale(${s})">
+    <rect x="-0.6" y="0.6" width="61.2" height="42" rx="3" fill="#000" opacity="0.45" filter="url(#bl1)"/>
+    <rect width="60" height="42" rx="3" fill="#1A1E26" stroke="#3B414C" stroke-width="0.4"/>
+    <g transform="translate(2.5 2.5)"><rect width="55" height="37" rx="1.4" fill="#0E1621"/>${inner}</g></g>`;
+}
+function panel(inner, title) {
+  return `<rect width="90" height="160" fill="#070B14"/>
+  <ellipse cx="45" cy="54" rx="48" ry="46" fill="#5B7BA6" opacity="0.15" filter="url(#bl8)"/>
+  <rect x="6" y="10" width="78" height="86" rx="2.4" fill="#0E182B" stroke="#24314A" stroke-width="0.4"/>
+  ${title ? `<text x="11" y="18.4" ${MONO} font-size="2.4" letter-spacing="0.5" fill="#8E9AB0">${title}</text><path d="M11 20.6 L79 20.6" stroke="#24314A" stroke-width="0.3"/>` : ''}
+  ${inner}`;
+}
+function bgGlow(warm = 0) {
+  return `<rect width="90" height="160" fill="#070B14"/>
+  <ellipse cx="45" cy="52" rx="44" ry="44" fill="${warm ? AMB : '#5B7BA6'}" opacity="${warm ? 0.12 : 0.15}" filter="url(#bl8)"/>`;
+}
+const oyeloMark = (x, y, fs = 4, col = '#F5F3EE') => `<text x="${x}" y="${y}" ${F} font-weight="900" font-size="${fs}" fill="${col}" letter-spacing="-0.1">oyelo<tspan fill="${AMB}">.</tspan></text>`;
+
+// ---------- screens ----------
+function scrFeedbackChat(t, a, o = {}) {
+  // a: start time; o.rate: number customer taps; o.tapAt; o.reviewAt; o.text
+  const k1 = rv(t, a), k2 = rv(t, a + 0.7);
+  const tap = o.tapAt ?? a + 2, rk = rv(t, tap), rate = o.rate ?? 5;
+  let chipsRow = '';
+  for (let i = 1; i <= 5; i++) {
+    const sel = t >= tap && i === rate;
+    chipsRow += `<rect x="${2 + (i - 1) * 5.1}" y="25.5" width="4.4" height="4" rx="1" fill="${sel ? AMB : '#24314A'}"/>${txt(4.2 + (i - 1) * 5.1, 28.3, i, 2, sel ? '#1A1208' : '#C9D6EA', 800, 'middle')}`;
+  }
+  const extra = o.reviewAt ? `${bub(37 + (o.text ? 4 : 0), ['Thanks! Would you share it', 'on Google?'], rv(t, o.reviewAt), 'in')}
+    <g opacity="${rv(t, o.reviewAt + 0.6).toFixed(3)}"><rect x="1.6" y="${46 + (o.text ? 4 : 0)}" width="22" height="4.6" rx="2.3" fill="${AMB}"/>
+    ${txt(12.6, 49.2 + (o.text ? 4 : 0), 'Leave a Google review', 1.8, '#1A1208', 800, 'middle')}</g>` : '';
+  return `${waHead(o.shop || 'Your Café')}
+    ${txt(14.5, 11, 'Today', 1.4, '#5E6B82', 600, 'middle')}
+    ${bub(13, ['Thanks for visiting Your Café!', 'How was your visit today?'], k1, 'in', { w: 25 })}
+    <g opacity="${k2.toFixed(3)}">${chipsRow}</g>
+    ${bub(32, [`${rate} / 5`], rk, 'out', { w: 9 })}
+    ${o.text ? bub(36.4, [o.text], rv(t, tap + 0.6), 'out') : ''}
+    ${extra}`;
+}
+function scrReviewForm(t, a) {
+  const f = 5 * ease(seg(t, a + 0.3, a + 1.6));
+  return `<rect width="29" height="7" fill="#151B26"/>${txt(14.5, 4.6, 'Write a review', 2, '#E6E9EF', 800, 'middle')}
+    ${txt(14.5, 14, 'Your Café', 2.4, '#F5F3EE', 800, 'middle')}${txt(14.5, 17.4, 'Rate your visit', 1.6, '#8E9AB0', 600, 'middle')}
+    ${stars(6.4, 22.6, 5, f, 1.9, 4)}
+    <rect x="2.5" y="28" width="24" height="13" rx="1" fill="#151B26" stroke="#2A3346" stroke-width="0.3"/>
+    <g opacity="${rv(t, a + 1.6).toFixed(3)}">${txt(4, 31.6, 'Great filter coffee and', 1.6, '#C9D6EA', 500)}${txt(4, 34.2, 'quick service.', 1.6, '#C9D6EA', 500)}</g>
+    <rect x="16" y="44" width="10.5" height="4.4" rx="2.2" fill="${AMB}"/>${txt(21.25, 47, 'Post', 1.8, '#1A1208', 800, 'middle')}
+    <g opacity="${rv(t, a + 2.6).toFixed(3)}"><rect x="3" y="51" width="23" height="4.4" rx="2.2" fill="#1F5A4A"/>${txt(14.5, 54, 'Review posted', 1.8, '#DFF3EA', 800, 'middle')}</g>`;
+}
+function scrPdf(t, a, wasted) {
+  return `<rect width="29" height="7" fill="#151B26"/>${txt(3, 4.6, 'menu_final_2.pdf', 1.7, '#C9D6EA', 700)}
+    <g filter="url(#bl05)" opacity="0.85"><rect x="2" y="9" width="25" height="46" fill="#D8D2C4"/>
+    ${[12, 15, 18, 23, 26, 29, 34, 37, 40, 45, 48].map((y, i) => `<rect x="4" y="${y}" width="${10 + R(i) * 12}" height="1.2" fill="#8A8378"/>`).join('')}</g>
+    <rect x="2" y="9" width="25" height="46" fill="#C9C1AE" opacity="0.35" filter="url(#bl1)"/>
+    ${wasted ? `<g opacity="${wasted.toFixed(3)}" transform="rotate(-14 14.5 30)"><rect x="3" y="25.5" width="23" height="8" rx="1" fill="none" stroke="#B5643A" stroke-width="0.8"/>${txt(14.5, 31.6, 'WASTED', 4, '#B5643A', 900, 'middle', 'letter-spacing="0.4"')}</g>` : ''}`;
+}
+function scrQrPage(t, o) {
+  const tiles = [['Menu', o.k[0]], ['Wi-Fi', o.k[1]], ['Offers', o.k[2]], ['Instagram', o.k[3]], ['Zomato · Swiggy', o.k[4]], ['Review us', o.k[5]]];
+  const swap = o.swap || 0;
+  const pos = (i) => { let j = i; if (i === 5) j = lerp(5, 0, swap); else if (i === 0) j = lerp(0, 1, swap); else if (i === 1) j = lerp(1, 2, swap); else if (i === 2) j = lerp(2, 3, swap); else if (i === 3) j = lerp(3, 4, swap); else if (i === 4) j = lerp(4, 5, swap); return j; };
+  let g = '';
+  tiles.forEach(([name, k], i) => {
+    const j = pos(i), col = Math.round(j) % 2, row = Math.floor(j / 2 + 1e-6);
+    const x = 1.8 + (j % 2) * 13, y = 24 + Math.floor(j / 2) * 9.5;
+    const hl = name === 'Review us';
+    g += `<g opacity="${k.toFixed(3)}"><rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="12.2" height="8" rx="1.4" fill="${hl ? AMB : '#1E2A3A'}"/>
+      <circle cx="${(x + 2.6).toFixed(2)}" cy="${(y + 2.8).toFixed(2)}" r="1.2" fill="${hl ? '#1A1208' : '#5B7BA6'}"/>
+      ${txt((x + 1.4).toFixed(2), (y + 6.6).toFixed(2), name, name.length > 10 ? 1.25 : 1.6, hl ? '#1A1208' : '#E6E9EF', 800)}</g>`;
+  });
+  return `<rect width="29" height="16" fill="${o.cover > 0 ? '#5A4430' : '#1A2438'}"/>
+    <rect width="29" height="16" fill="url(#cov)" opacity="${(o.cover || 0).toFixed(3)}"/>
+    <defs><linearGradient id="cov" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E8A04F"/><stop offset="1" stop-color="#3A2C22"/></linearGradient></defs>
+    ${txt(2, 19.8, 'Your Café', 2.4, '#F5F3EE', 800)}
+    <g opacity="${(o.hours || 0).toFixed(3)}"><rect x="17" y="17.6" width="10.4" height="3.4" rx="1.7" fill="#1F5A4A"/>${txt(22.2, 19.9, 'Open · 8am–11pm', 1.15, '#DFF3EA', 700, 'middle')}</g>
+    ${g}`;
+}
+function scrClubForm(t, a, o = {}) {
+  const typed = (s, t0, d) => s.slice(0, Math.floor(s.length * seg(t, t0, t0 + d)));
+  const joined = t >= (o.joinAt ?? a + 3);
+  return `<rect width="29" height="16" fill="#16302A"/>${txt(14.5, 7, 'Join the', 1.8, '#8FBFAE', 600, 'middle')}${txt(14.5, 11.4, 'Your Café Club', 2.7, '#F5F3EE', 900, 'middle')}
+    ${!joined ? `${txt(2.5, 21, 'Name', 1.5, '#8E9AB0', 600)}<rect x="2.5" y="22" width="24" height="4.6" rx="1" fill="#1E2A3A"/>${txt(3.8, 25.2, typed('Ravi', a + 0.4, 0.6), 1.9, '#E6E9EF', 600)}
+    ${txt(2.5, 31, 'WhatsApp number', 1.5, '#8E9AB0', 600)}<rect x="2.5" y="32" width="24" height="4.6" rx="1" fill="#1E2A3A"/>${txt(3.8, 35.2, typed('98•• ••• ••12', a + 1.1, 1.0), 1.9, '#E6E9EF', 600)}
+    <rect x="2.5" y="41" width="24" height="5" rx="2.5" fill="${AMB}"/>${txt(14.5, 44.3, 'Join the club', 1.9, '#1A1208', 800, 'middle')}` :
+    `<g ${up(rv(t, o.joinAt ?? a + 3))}><rect x="2" y="19" width="25" height="16" rx="1.4" fill="${PAPER}"/>
+      ${txt(14.5, 23.6, 'Welcome, Ravi!', 2.2, INK, 900, 'middle')}${txt(14.5, 27.6, 'Welcome treat unlocked', 1.6, '#7A746A', 700, 'middle')}
+      <rect x="5" y="29.6" width="19" height="3.8" rx="1.9" fill="${AMB}"/>${txt(14.5, 32.2, 'Show this at the counter', 1.35, '#1A1208', 800, 'middle')}</g>
+     <g opacity="${rv(t, o.bdayAt ?? a + 99).toFixed(3)}"><rect x="2" y="38" width="25" height="7" rx="1.4" fill="#1E2A3A"/>
+      ${txt(4, 42.4, 'Birthday treat', 1.8, '#E6E9EF', 800)}<rect x="20" y="39.8" width="5.4" height="3" rx="1.5" fill="${AMB}"/><circle cx="24" cy="41.3" r="1.1" fill="#1A1208"/></g>`}`;
+}
+function scrFeed(t, a) {
+  const sc = (t - a) * 9;
+  let s = '';
+  for (let i = 0; i < 6; i++) {
+    const y = ((i * 22 - sc) % 132 + 132) % 132 - 20;
+    s += `<g transform="translate(0 ${y.toFixed(2)})"><circle cx="3.5" cy="3" r="1.6" fill="#3E5070"/><rect x="6.4" y="2.2" width="10" height="1.4" fill="#3E5070"/>
+      <rect x="1.5" y="6" width="26" height="12" fill="#1C2C47"/><rect x="1.5" y="19" width="16" height="1.2" fill="#2A3346"/></g>`;
+  }
+  return `<rect width="29" height="58" fill="#0B0F17"/>${s}<rect width="29" height="6" fill="#0B0F17"/>${txt(14.5, 4.2, 'Feed', 1.9, '#8E9AB0', 800, 'middle')}`;
+}
+function scrMemory(t, a) {
+  let s = '';
+  for (let i = 0; i < 16; i++) {
+    const x = 2 + (i % 4) * 6.4, y = 14 + Math.floor(i / 4) * 7.4;
+    const flipT = a + 0.4 + ((i * 7) % 16) * 0.18, open = t > flipT && t < flipT + 1.2 || (i % 5 === 0 && t > flipT);
+    s += `<rect x="${x}" y="${y}" width="5.6" height="6.6" rx="0.8" fill="${open ? PAPER : '#24314A'}"/>
+      ${open ? `<circle cx="${x + 2.8}" cy="${y + 3.3}" r="1.5" fill="${['#E8A04F', '#5B7BA6', '#B5643A', '#8FBFAE'][i % 4]}"/>` : `<circle cx="${x + 2.8}" cy="${y + 3.3}" r="0.6" fill="#3E5070"/>`}`;
+  }
+  return `<rect width="29" height="7" fill="#151B26"/>${txt(14.5, 4.7, 'Memory match', 2, '#E6E9EF', 800, 'middle')}
+    ${txt(2, 11.2, 'Your Café · Play hub', 1.5, AMB, 700)}${s}
+    ${txt(14.5, 49.6, 'Moves 14 · 0:42', 1.6, '#8E9AB0', 600, 'middle')}`;
+}
+function scrLeaderboard(t, a) {
+  const rows = [['1', 'Ravi', '980'], ['2', 'Sneha', '940'], ['3', 'Arjun', '910'], ['4', 'You', '870']];
+  return `<rect width="29" height="7" fill="#151B26"/>${txt(14.5, 4.7, 'This week', 2, '#E6E9EF', 800, 'middle')}
+    ${rows.map(([n, nm, sc], i) => `<g ${up(rv(t, a + 0.2 + i * 0.25), 1.2)}><rect x="2" y="${10 + i * 6.4}" width="25" height="5.4" rx="1" fill="${i === 0 ? AMB : '#1E2A3A'}"/>
+      ${txt(4, 13.6 + i * 6.4, n, 1.9, i === 0 ? '#1A1208' : '#8E9AB0', 900)}${txt(7.4, 13.6 + i * 6.4, nm, 1.9, i === 0 ? '#1A1208' : '#E6E9EF', 800)}${txt(25.4, 13.6 + i * 6.4, sc, 1.7, i === 0 ? '#1A1208' : '#8E9AB0', 700, 'end')}</g>`).join('')}
+    <g opacity="${rv(t, a + 1.4).toFixed(3)}"><rect x="2" y="37" width="25" height="9" rx="1.4" fill="${PAPER}"/>${txt(14.5, 40.8, 'Prize: free dessert', 1.9, INK, 900, 'middle')}${txt(14.5, 44, 'sent automatically · Monday', 1.4, '#7A746A', 700, 'middle')}</g>`;
+}
+function scrNearby(t, a) {
+  const rows = [['Fitness Studio', 'Gym'], ['Your Café', 'Café'], ['Hair & Beauty', 'Salon']];
+  return `<rect width="29" height="7" fill="#151B26"/>${txt(14.5, 4.7, 'Nearby on Oyelo', 2, '#E6E9EF', 800, 'middle')}
+    ${txt(2, 11.2, 'Warangal', 1.6, AMB, 800)}
+    ${rows.map(([nm, ty], i) => `<g ${up(rv(t, a + 0.2 + i * 0.35), 1.2)}><rect x="2" y="${14 + i * 10}" width="25" height="8.6" rx="1.4" fill="${i === 1 ? '#2A2220' : '#1E2A3A'}" stroke="${i === 1 ? AMB : 'none'}" stroke-width="0.4"/>
+      <rect x="3.4" y="${15.4 + i * 10}" width="5.8" height="5.8" rx="1" fill="${i === 1 ? AMB : '#3E5070'}"/>
+      ${txt(10.6, 18 + i * 10, nm, 1.8, '#E6E9EF', 800)}${txt(10.6, 20.6 + i * 10, ty + ' · first-visit perk', 1.25, '#8E9AB0', 600)}</g>`).join('')}`;
+}
+function scrPass(t, a) {
+  return `<rect width="29" height="58" fill="#0E1621"/>
+    <g ${up(rv(t, a), 2)}><rect x="2" y="6" width="25" height="16" rx="2" fill="${AMB}"/>${txt(4, 11, 'OYELO PASS', 1.6, '#1A1208', 900, 'start', 'letter-spacing="0.3"')}
+    ${txt(4, 15.6, 'Warangal', 3, '#1A1208', 900)}${txt(4, 19.4, 'First-visit perks nearby', 1.5, '#3A2810', 700)}</g>
+    ${['Fitness Studio', 'Hair & Beauty', 'Bakery'].map((nm, i) => `<g ${up(rv(t, a + 0.8 + i * 0.4), 1.2)}><rect x="2" y="${26 + i * 8}" width="25" height="6.6" rx="1.2" fill="#1E2A3A"/>
+      ${txt(4, 29.8 + i * 8, nm, 1.8, '#E6E9EF', 800)}<rect x="19" y="${27.6 + i * 8}" width="6.6" height="3.4" rx="1.7" fill="#1F5A4A"/>${txt(22.3, 29.9 + i * 8, 'perk', 1.4, '#DFF3EA', 800, 'middle')}</g>`).join('')}`;
+}
+function scrOwnerAlert(t, a, o = {}) {
+  const res = o.resolveAt ? rv(t, o.resolveAt) : 0;
+  return `<rect width="29" height="7" fill="#151B26"/>${txt(14.5, 4.7, 'Oyelo · Feedback', 1.9, '#E6E9EF', 800, 'middle')}
+    <g ${up(rv(t, a), 1.5)}><rect x="2" y="10" width="25" height="18" rx="1.4" fill="#2A1C18" stroke="#B5643A" stroke-width="0.4"/>
+      ${txt(4, 14, 'New feedback · 2 / 5', 1.8, '#F0A07A', 800)}${txt(4, 17.4, 'Table 4 · today, 8:40 pm', 1.4, '#9DA8BB', 600)}
+      ${txt(4, 21.4, '“Food was cold today.”', 1.8, '#E6E9EF', 600)}
+      <rect x="4" y="23.4" width="10" height="3.4" rx="1.7" fill="${res > 0.5 ? '#1F5A4A' : AMB}"/>${txt(9, 25.7, res > 0.5 ? 'Resolved' : 'Call back', 1.4, res > 0.5 ? '#DFF3EA' : '#1A1208', 800, 'middle')}</g>
+    <g opacity="${rv(t, a + 0.9).toFixed(3)}"><rect x="2" y="31" width="25" height="7" rx="1.4" fill="#1E2A3A"/>${txt(4, 35.4, 'Slow service · 3 / 5', 1.6, '#C9D6EA', 700)}</g>
+    <g opacity="${rv(t, a + 1.5).toFixed(3)}"><rect x="2" y="40" width="25" height="7" rx="1.4" fill="#1E2A3A"/>${txt(4, 44.4, 'Staff attitude · 2 / 5', 1.6, '#C9D6EA', 700)}</g>`;
+}
+function scrLockNotif(t, a) {
+  return `<rect width="29" height="58" fill="#0B0F17"/>${txt(14.5, 14, '9:41', 6, '#E6E9EF', 300, 'middle')}${txt(14.5, 18, 'Tuesday', 1.6, '#8E9AB0', 600, 'middle')}
+    <g ${up(rv(t, a), 2)}><rect x="2" y="24" width="25" height="12" rx="1.8" fill="#1E2A3A"/>
+      ${txt(4, 27.6, 'Google · New review', 1.5, '#9DA8BB', 700)}${stars(4.6, 30.6, 5, 1, 1, 2.2)}
+      ${txt(4, 34.2, '“Food was cold…”', 1.7, '#E6E9EF', 600)}</g>`;
+}
+function scrContacts(t, a) {
+  return `<rect width="29" height="7" fill="#151B26"/>${txt(14.5, 4.7, 'Customers', 2, '#E6E9EF', 800, 'middle')}
+    <circle cx="14.5" cy="24" r="6" fill="#1E2A3A"/>${person(14.5, 29, 0.5, { color: '#3E5070' })}
+    ${txt(14.5, 36, 'No customers saved', 2, '#C9D6EA', 800, 'middle')}${txt(14.5, 39.4, 'You can’t message anyone', 1.5, '#8E9AB0', 600, 'middle')}`;
+}
+function scrInsights(t, a) {
+  const cards = [['Feedback', 0], ['Club joins', 0.5], ['Treats redeemed', 1.0], ['Repeat visits', 1.5]];
+  return cards.map(([nm, d], i) => {
+    const k = rv(t, a + d), x = 11 + (i % 2) * 35, y = 25 + Math.floor(i / 2) * 32, hl = i === 3;
+    let bars = '';
+    for (let j = 0; j < 7; j++) { const h = (3 + R(i * 7 + j) * 7 + j * 1.1) * ease(seg(t, a + d + 0.2, a + d + 1.1)); bars += `<rect x="${x + 2 + j * 4.2}" y="${y + 24 - h}" width="3" height="${h.toFixed(2)}" rx="0.5" fill="${hl ? AMB : '#5B7BA6'}"/>`; }
+    return `<g opacity="${k.toFixed(3)}"><rect x="${x}" y="${y}" width="33" height="28" rx="1.6" fill="${hl ? '#2A2220' : '#141F35'}" stroke="${hl ? AMB : '#24314A'}" stroke-width="0.35"/>
+      ${txt(x + 2, y + 4.6, nm, 2.4, '#E6E9EF', 800)}${bars}</g>`;
+  }).join('');
+}
+
+// ---------- overlays ----------
+function hookTitle(t, end) {
+  const k = rv(t, 0.05, 0.4) * (1 - ease(seg(t, end - 0.3, end)));
+  if (k <= 0) return '';
+  return `<g opacity="${k.toFixed(3)}" transform="translate(0 ${((1 - rv(t, 0.05, 0.4)) * 20).toFixed(1)})">
+    <rect x="0" y="0" width="1080" height="560" fill="url(#hookfade)"/>
+    <defs><linearGradient id="hookfade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#06080D" stop-opacity="0.9"/><stop offset="1" stop-color="#06080D" stop-opacity="0"/></linearGradient></defs>
+    <text x="540" y="330" text-anchor="middle" ${F} font-weight="900" font-size="74" fill="#F5F3EE" letter-spacing="-1">${TITLE[0]}</text>
+    <text x="540" y="418" text-anchor="middle" ${F} font-weight="900" font-size="74" fill="${AMB}" letter-spacing="-1">${TITLE[1]}</text></g>`;
+}
+function endCard(t, a) {
+  const k = rv(t, a + 0.1, 0.6), k2 = rv(t, a + 0.6), k3 = rv(t, a + 1.0), k4 = rv(t, a + 1.4);
+  return `<rect width="1080" height="1920" fill="#06080D"/>
+  <ellipse cx="540" cy="760" rx="520" ry="420" fill="${AMB}" opacity="0.07" filter="url(#bl8)"/>
+  <g opacity="${k.toFixed(3)}" transform="translate(0 ${((1 - k) * 30).toFixed(1)})">
+    <text x="540" y="640" text-anchor="middle" ${F} font-weight="900" font-size="190" fill="#F5F3EE" letter-spacing="-6">oyelo<tspan fill="${AMB}">.</tspan></text>
+    <text x="540" y="720" text-anchor="middle" ${F} font-weight="600" font-size="34" fill="#9DA8BB">Reviews · Feedback · Regulars, on WhatsApp</text></g>
+  <g opacity="${k2.toFixed(3)}"><rect x="300" y="790" width="480" height="96" rx="48" fill="${AMB}"/>
+    <text x="540" y="854" text-anchor="middle" ${F} font-weight="900" font-size="50" fill="#1A1208">oyelo.in</text></g>
+  <g opacity="${k3.toFixed(3)}"><rect x="300" y="910" width="480" height="84" rx="42" fill="none" stroke="#E9E3D6" stroke-width="3"/>
+    <text x="540" y="965" text-anchor="middle" ${F} font-weight="800" font-size="38" fill="#E9E3D6">Comment “DEMO”</text></g>
+  <g opacity="${k4.toFixed(3)}"><text x="540" y="1070" text-anchor="middle" ${F} font-weight="600" font-size="30" fill="#8E9AB0">Starting in Warangal · from ₹600/month</text></g>`;
+}
+
+// ---------- reels ----------
+const SC = {
+r1: [
+  [0, (t) => interior(t, { door: 0.3 + 0.5 * Math.abs(Math.sin(t * 0.9)), extra:
+      table(46, 92, { qr: true }) + seated(38, 92, 1, {}) +
+      walkTo(t, 0.3, 2.6, 52, 110, 79, 110, 1.05) + walkTo(t, 1.4, 2.6, 46, 112, 79, 110, 1.05) + walkTo(t, 2.5, 2.6, 50, 111, 79, 110, 1.05) +
+      `<g ${up(rv(t, L(1) + 0.2))}>${person(30, 112, 1.1, { phone: true, color: '#2A1E1E' })}
+        <g transform="translate(14 56)"><rect width="38" height="14" rx="1.6" fill="#1E2A3A" stroke="#B5643A" stroke-width="0.4"/>
+        ${stars(3.5, 4, 5, 1, 1.4, 3.2)}${txt(2.5, 10.4, '“Worst service ever.”', 2.4, '#E6E9EF', 700)}</g></g>` }), (p) => 1 + 0.06 * p],
+  [2, (t) => bgGlow() + phone(45, 54, 1.45, `${waHead('Ravi')}${txt(14.5, 26, 'No messages', 2.4, '#8E9AB0', 800, 'middle')}${txt(14.5, 30, 'after his visit', 1.7, '#5E6B82', 600, 'middle')}`) +
+      chip(45, 6, 46, 'Nobody asked for a review', rv(t, L(2) + 1.2), { fs: 2.4 }), (p) => 1 + 0.03 * p],
+  [3, (t) => bgGlow(1) + phone(45, 54, 1.45, scrFeedbackChat(t, L(3) + 0.3, { tapAt: L(4) + 0.6, reviewAt: L(4) + 1.6 })), (p) => 1 + 0.03 * p],
+  [5, (t) => bgGlow(1) + phone(45, 50, 1.3, scrReviewForm(t, L(5) - 0.3)) +
+      chip(20, 94, 30, 'Every customer asked', rv(t, L(5) + 0.2), { paper: true, fs: 2.2 }) + chip(54, 94, 22, 'No rewards', rv(t, L(5) + 1.0), { paper: true, fs: 2.2 }) + chip(78, 94, 18, 'Google-safe', rv(t, L(5) + 1.8), { amber: true, fs: 2.2 }), (p) => 1 + 0.02 * p],
+],
+r2: [
+  [0, (t) => interior(t, { door: seg(t, 2.0, 2.6) * (1 - seg(t, 3.6, 4.2)), extra:
+      table(46, 92, { qr: true }) + (t < 1.4 ? seated(52, 92, 1, {}) : '') + `<rect x="${44 + 2 * seg(t, 0.6, 1.1)}" y="90.6" width="5" height="1.4" rx="0.7" fill="#C9C1AE"/>` +
+      walkTo(t, 1.4, 2.4, 52, 111, 79, 110, 1.05) }), (p) => 1 + 0.06 * p],
+  [2, (t) => bgGlow() + phone(45, 54, 1.45, scrLockNotif(t, L(2) + 0.6)), (p) => 1 + 0.03 * p],
+  [3, (t) => bgGlow(1) + phone(45, 54, 1.45, scrFeedbackChat(t, L(3) + 0.2, { rate: 2, tapAt: L(3) + 2.0, text: 'Food was cold today' })), (p) => 1 + 0.03 * p],
+  [4, (t) => bgGlow(1) + phone(45, 54, 1.45, scrOwnerAlert(t, L(4), { resolveAt: L(5) + 1.6 })) + chip(45, 6, 36, "Owner's phone", rv(t, L(4)), { fs: 2.4 }), (p) => 1 + 0.03 * p],
+  [6, (t) => bgGlow(1) + phone(45, 54, 1.45, scrFeedbackChat(t, L(6) - 3, { rate: 2, tapAt: L(6) - 2, text: 'Food was cold today', reviewAt: L(6) + 0.3 })) + chip(45, 6, 34, 'Nothing hidden', rv(t, L(6) + 1.4), { amber: true }), (p) => 1 + 0.02 * p],
+],
+r3: [
+  [0, (t) => interior(t, { extra: table(46, 92, { qr: true }) + seated(36, 92, 1, { phone: true }) + seated(56, 92, 1, { phone: true }) +
+      `<circle cx="46" cy="${89.9}" r="${(3 + 2 * Math.sin(t * 4)).toFixed(2)}" fill="none" stroke="${AMB}" stroke-width="0.4" opacity="0.7"/>` }), (p) => 1 + 0.12 * ease(p)],
+  [1, (t) => bgGlow() + phone(45, 54, 1.45, scrPdf(t, L(1), rv(t, L(2) + 2.0))), (p) => 1 + 0.03 * p],
+  [3, (t) => bgGlow(1) + phone(45, 54, 1.45, scrQrPage(t, {
+      k: [rv(t, L(3) + 1.6), rv(t, L(3) + 2.3), rv(t, L(3) + 3.2), rv(t, L(4) + 0.1), rv(t, L(4) + 1.0), rv(t, L(4) + 2.4)],
+      cover: rv(t, L(5)), hours: rv(t, L(5) + 0.9), swap: ease(seg(t, L(5) + 2.2, L(5) + 3.0)) })), (p) => 1 + 0.03 * p],
+],
+r4: [
+  [0, (t) => { let w = ''; for (let i = 0; i < 9; i++) { const t0 = i * 0.6; w += walkTo(t, t0, 2.2, 79, 110, 40 + R(i) * 14, 112 + R(i + 9) * 3, 1, { fadeIn: true, fadeEnd: true }); }
+      return interior(t, { door: 0.6, extra: table(46, 92) + w }); }, (p) => 1 + 0.05 * p],
+  [1, (t) => bgGlow() + phone(45, 54, 1.45, scrContacts(t, L(1))), (p) => 1 + 0.03 * p],
+  [2, (t) => { let w = ''; for (let i = 0; i < 5; i++) { const t0 = L(2) - 0.4 + i * 0.5; w += walkTo(t, t0, 2.4, 50 - i * 2, 111, 80, 110, 1, { op: 0.75 }); }
+      return interior(t, { door: 0.8, extra: table(46, 92) + w }); }, (p) => 1 + 0.04 * p],
+  [3, (t) => bgGlow(1) + phone(45, 54, 1.45, scrClubForm(t, L(3) + 0.6, { joinAt: L(4) - 0.1, bdayAt: L(4) + 1.8 })), (p) => 1 + 0.03 * p],
+  [5, (t) => bgGlow(1) + tablet(45, 52, 1.25, `${txt(4, 6, 'Counter mode', 2.6, '#E6E9EF', 800)}${txt(51, 6, 'Your Café Club', 2, AMB, 800, 'end')}
+      <rect x="4" y="10" width="22" height="5" rx="1" fill="#1E2A3A"/>${txt(5.4, 13.6, 'Ravi', 2.2, '#E6E9EF', 600)}
+      <rect x="4" y="17" width="22" height="5" rx="1" fill="#1E2A3A"/>${txt(5.4, 20.6, '98•• ••• ••12', 2.2, '#E6E9EF', 600)}
+      <rect x="4" y="25" width="22" height="5.6" rx="2.8" fill="${rv(t, L(5) + 1.8) > 0.5 ? '#1F5A4A' : AMB}"/>${txt(15, 28.8, rv(t, L(5) + 1.8) > 0.5 ? 'Added ✓' : 'Add member', 2.2, rv(t, L(5) + 1.8) > 0.5 ? '#DFF3EA' : '#1A1208', 800, 'middle')}
+      ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map((n, i) => `<rect x="${30 + (i % 3) * 7.6}" y="${10 + Math.floor(i / 3) * 6.4}" width="6.8" height="5.6" rx="1" fill="#1E2A3A"/>${txt(33.4 + (i % 3) * 7.6, 14 + Math.floor(i / 3) * 6.4, n, 2.2, '#C9D6EA', 700, 'middle')}`).join('')}`) +
+      person(18, 96, 1.6, { color: '#20242C', rim: AMB }) + chip(45, 90, 38, 'Signed up in seconds', rv(t, L(5) + 2.2), { amber: true }), (p) => 1 + 0.03 * p],
+],
+r5: [
+  [0, (t) => interior(t, { extra: table(30, 92) + table(62, 92) + seated(24, 92, 1, { phone: true }) + seated(36, 92, 1, { phone: true }) + seated(56, 92, 1, { phone: true }) + seated(68, 92, 1, { phone: true }) }), (p) => 1 + 0.06 * p],
+  [1, (t) => bgGlow() + phone(45, 54, 1.45, scrFeed(t, L(1))), (p) => 1 + 0.03 * p],
+  [2, (t) => bgGlow(1) + phone(45, 54, 1.45, scrFeed(t, L(1)) + `<rect width="29" height="58" fill="#0E1621" opacity="${rv(t, L(2) + 0.6).toFixed(3)}"/>
+      <g opacity="${rv(t, L(2) + 0.9).toFixed(3)}"><circle cx="14.5" cy="24" r="7" fill="${AMB}"/><path d="M12.4 20.6 L17.6 24 L12.4 27.4 Z" fill="#1A1208"/>${txt(14.5, 37, 'Play at', 1.8, '#8E9AB0', 600, 'middle')}${txt(14.5, 40.6, 'Your Café', 2.6, '#F5F3EE', 900, 'middle')}</g>`), (p) => 1 + 0.03 * p],
+  [3, (t) => bgGlow(1) + phone(45, 50, 1.3, scrMemory(t, L(3))) +
+      chip(18, 94, 24, 'Memory match', rv(t, L(3) + 1.3), { paper: true, fs: 2.2 }) + chip(45, 94, 24, 'Catch the dish', rv(t, L(3) + 2.2), { paper: true, fs: 2.2 }) + chip(72, 94, 22, 'Shop quiz', rv(t, L(3) + 3.2), { amber: true, fs: 2.2 }), (p) => 1 + 0.02 * p],
+  [4, (t) => bgGlow(1) + phone(45, 54, 1.45, scrLeaderboard(t, L(4))), (p) => 1 + 0.03 * p],
+  [5, (t) => interior(t, { warm: 1, door: 0.4 + 0.5 * seg(t, L(5), L(5) + 0.6), extra: table(46, 92) + walkTo(t, L(5), 2.2, 79, 110, 40, 112, 1.1, { fadeIn: true, fadeEnd: false, rim: AMB }) +
+      chip(45, 64, 30, 'Prize claimed', rv(t, L(5) + 1.4), { amber: true }) }), (p) => 1 + 0.04 * p],
+],
+r6: [
+  [0, (t) => street(t, { shops: [['GYM', 0.8], ['YOUR CAFÉ', 0, true], ['SALON', 0.7]], extra:
+      walkTo(t, 0.2, 2.6, -4, 106, 16, 102, 1.5, { color: '#39425A' }) + walkTo(t, 0.9, 2.6, 94, 107, 74, 102, 1.5, { color: '#39425A' }) + walkTo(t, 1.7, 2.6, -4, 107, 16, 102, 1.5, { color: '#39425A' }) + walkTo(t, 2.4, 2.6, 94, 106, 74, 102, 1.5, { color: '#39425A' }) }), (p) => 1 + 0.05 * p],
+  [1, (t) => street(t, { shops: [['GYM', 0.8], ['YOUR CAFÉ', rv(t, L(1) + 1.2), true], ['SALON', 0.7]], extra:
+      `<path d="M18 92 Q31 80 42 92" stroke="${AMB}" stroke-width="0.7" fill="none" stroke-dasharray="1.6 1" opacity="${rv(t, L(1)).toFixed(3)}"/><path d="M40.4 89.6 L42.4 92.4 L39 92.4 Z" fill="${AMB}" opacity="${rv(t, L(1)).toFixed(3)}"/>` +
+      walkTo(t, L(1) + 0.3, 2.4, 16, 106, 44, 102, 1.5, { fadeIn: true, rim: AMB, color: '#39425A' }) + walkTo(t, L(1) + 0.9, 2.4, 74, 106, 46, 102, 1.5, { fadeIn: true, rim: AMB, color: '#39425A' }) }), (p) => 1 + 0.04 * p],
+  [2, (t) => bgGlow(1) + phone(45, 54, 1.45, scrPass(t, L(2) + 0.3)), (p) => 1 + 0.03 * p],
+  [3, (t) => street(t, { shops: [['GYM', 0.9], ['YOUR CAFÉ', 0.9, true], ['SALON', 0.9]], extra:
+      walkTo(t, L(3) + 0.2, 2.4, 16, 106, 44, 102, 1.5, { fadeIn: true, rim: AMB, color: '#39425A' }) + walkTo(t, L(3) + 1.8, 2.4, 44, 106, 74, 102, 1.5, { fadeIn: true, rim: AMB, color: '#39425A' }) +
+      `<path d="M18 92 Q31 80 42 92 M48 92 Q61 80 72 92" stroke="${AMB}" stroke-width="0.6" fill="none" stroke-dasharray="1.6 1"/>` }), (p) => 1 + 0.04 * p],
+  [4, (t) => bgGlow(1) + phone(45, 54, 1.45, scrNearby(t, L(4))), (p) => 1 + 0.03 * p],
+  [5, (t) => street(t, { shops: [['GYM', 1], ['YOUR CAFÉ', 1, true], ['SALON', 1]], extra: dust(16, 8, 0, 60, 90, 50, t, '#FFE0B0', 0.4, 0.2) +
+      chip(45, 26, 22, 'No ads', rv(t, L(5)), { fs: 2.6 }) + chip(45, 33, 44, 'Shops helping shops', rv(t, L(5) + 0.9), { amber: true }) }), (p) => 1 + 0.04 * p],
+],
+r7: [
+  [0, (t) => { let q = ''; for (let i = 0; i < 7; i++) { const y = 66 - ((t * 2.2 + i * 4) % 22); q += txt(8 + R(i) * 26, y.toFixed(2), '?', 3 + R(i + 2) * 3, '#5B7BA6', 800, 'start', `opacity="${(0.25 + 0.35 * R(i + 5)).toFixed(2)}"`); }
+      return interior(t, { extra: table(52, 92) + q }); }, (p) => 1 + 0.06 * p],
+  [2, (t) => panel(scrInsights(t, L(3) - 0.2) + `<g opacity="${rv(t, L(2)).toFixed(3)}">${oyeloMark(11, 18.6, 3.2)}</g>`, ''), (p) => 1 + 0.02 * p],
+  [4, (t) => {
+      const items = [['WhatsApp reviews', 0], ['Table QR page', 0.25], ['Games + prizes', 0.5], ['Warangal Pass', 0.75]];
+      const d = D(4);
+      return panel(items.map(([nm, f], i) => { const k = rv(t, L(4) + d * f), x = 11 + (i % 2) * 35, y = 26 + Math.floor(i / 2) * 32;
+        return `<g ${up(k)}><rect x="${x}" y="${y}" width="33" height="28" rx="1.6" fill="#141F35" stroke="#24314A" stroke-width="0.35"/>
+          <circle cx="${x + 7}" cy="${y + 9}" r="4.4" fill="${AMB}"/>${[stars(x + 7, y + 9.2, 1, 1, 2.2).replace(AMB, '#1A1208'), `<rect x="${x + 4.6}" y="${y + 6.6}" width="4.8" height="4.8" fill="#1A1208"/><rect x="${x + 5.6}" y="${y + 7.6}" width="1.2" height="1.2" fill="${AMB}"/><rect x="${x + 7.4}" y="${y + 9.2}" width="1.2" height="1.2" fill="${AMB}"/>`, `<path d="M${x + 5.6} ${y + 6.6} L${x + 9.4} ${y + 9} L${x + 5.6} ${y + 11.4} Z" fill="#1A1208"/>`, `<path d="M${x + 7} ${y + 12.4} C${x + 4} ${y + 9} ${x + 4.6} ${y + 6} ${x + 7} ${y + 6} C${x + 9.4} ${y + 6} ${x + 10} ${y + 9} ${x + 7} ${y + 12.4} Z" fill="#1A1208"/><circle cx="${x + 7}" cy="${y + 8.4}" r="0.9" fill="${AMB}"/>`][i]}${txt(x + 2.4, y + 22, nm, 2.5, '#E6E9EF', 800)}</g>`; }).join(''), 'EVERYTHING IN ONE PLACE'); }, (p) => 1 + 0.02 * p],
+  [5, (t) => {
+      const d = D(5);
+      return panel(`
+        <g ${up(rv(t, L(5) + 0.1))}><rect x="11" y="26" width="33" height="40" rx="1.6" fill="#141F35" stroke="#24314A" stroke-width="0.35"/>
+          ${txt(14, 32, 'QR plan', 2.6, '#C9D6EA', 800)}${txt(14, 43, '₹600', 6.4, '#F5F3EE', 900)}${txt(14, 48, 'per month', 2, '#8E9AB0', 600)}
+          ${txt(14, 55, 'Table QR page', 1.9, '#9DA8BB', 600)}${txt(14, 58.4, 'menu · wifi · review link', 1.6, '#8E9AB0', 600)}</g>
+        <g ${up(rv(t, L(5) + d * 0.45))}><rect x="46" y="26" width="33" height="40" rx="1.6" fill="#2A2220" stroke="${AMB}" stroke-width="0.45"/>
+          ${txt(49, 32, 'Growth', 2.6, AMB, 800)}${txt(49, 43, '₹2,500', 6.4, '#F5F3EE', 900)}${txt(49, 48, 'per month', 2, '#8E9AB0', 600)}
+          ${txt(49, 55, 'Reviews · club · games', 1.9, '#9DA8BB', 600)}${txt(49, 58.4, 'Pass · insights', 1.6, '#8E9AB0', 600)}</g>
+        ${chip(45, 76, 46, 'Done-for-you setup available', rv(t, L(5) + d * 0.78), { paper: true })}`, 'PRICING'); }, (p) => 1 + 0.02 * p],
+],
+};
+
+const SCN = SC[REEL];
+const END_AT = mid(5, 6);
+function sceneAt(t) {
+  let idx = 0;
+  for (let i = 0; i < SCN.length; i++) { const st = SCN[i][0] === 0 ? 0 : mid(SCN[i][0] - 1, SCN[i][0]); if (t >= st) idx = i; }
+  const st = SCN[idx][0] === 0 ? 0 : mid(SCN[idx][0] - 1, SCN[idx][0]);
+  const en = idx + 1 < SCN.length ? mid(SCN[idx + 1][0] - 1, SCN[idx + 1][0]) : END_AT;
+  return [SCN[idx], st, en];
+}
+
+const art = document.getElementById('art');
+const cap = document.getElementById('cap');
+const gctx = document.getElementById('grain').getContext('2d');
+const gimg = gctx.createImageData(540, 960);
+let gseed = 1;
+function grain() {
+  const d = gimg.data;
+  for (let i = 0; i < d.length; i += 4) { gseed = (gseed * 1103515245 + 12345) & 0x7fffffff; const v = (gseed >> 16) & 255; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
+  gctx.putImageData(gimg, 0, 0);
+}
+window.TOTAL = TMD.total;
+window.render = function (t) {
+  PID = 0;
+  let body;
+  if (t >= END_AT) body = endCard(t, END_AT);
+  else {
+    const [[, fn, cam], st, en] = sceneAt(t);
+    const s = cam(clamp((t - st) / (en - st)));
+    body = `<g transform="translate(540 960) scale(${s.toFixed(4)}) translate(-540 -960)"><g transform="scale(12)">${fn(t)}</g></g>`;
+    const fin = 1 - ease(seg(t, st, st + 0.12));
+    if (fin > 0 && st > 0) body += `<rect width="1080" height="1920" fill="#06080D" opacity="${fin.toFixed(3)}"/>`;
+    body += hookTitle(t, mid(1, 2));
+  }
+  art.innerHTML = DEFS + body;
+  const c = CUES.find(([a, b]) => t >= a && t < b);
+  if (c) { cap.innerHTML = c[2]; cap.style.opacity = Math.min(ease((t - c[0]) / 0.1), ease((c[1] - t) / 0.1)); } else cap.style.opacity = 0;
+  grain();
+};
+window.render(0);
+</script>
+</body>
+</html>
